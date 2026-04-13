@@ -1,0 +1,5 @@
+{
+  "name": "MedTest AI",
+  "description": "An AI-powered adaptive learning platform for medical students featuring real-time explanations, interactive visuals, and personalized study paths.",
+  "requestFramePermissions": []
+}
