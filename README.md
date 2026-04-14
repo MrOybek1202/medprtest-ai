@@ -1,3 +1,29 @@
+# 🏥 MedPrTest AI
+
+> AI-powered medical exam preparation platform with intelligent testing and analytics.
+
+## 🤖 Features
+- **AI-Powered Questions** - Intelligent test generation
+- **Real-time Analytics** - Track your progress
+- **Personalized Learning** - Adaptive difficulty levels
+- **Question Bank** - Comprehensive medical question database
+- **Performance Reports** - Detailed exam analytics
+- **Study Recommendations** - AI suggestions for improvement
+
+## 🔧 Technologies
+- React/Next.js
+- TypeScript
+- Node.js Backend
+- MongoDB Database
+- OpenAI Integration
+- Vercel Deployment
+
+## 📥 Installation
+```bash
+git clone https://github.com/MrOybek1202/medprtest-ai.git
+cd medprtest-ai
+npm install
+npm run dev
 # MedTest AI
 
 Tibbiy ta'limda yangi bosqich. AI asosidagi klinik testlar va tahlillar tizimi.
