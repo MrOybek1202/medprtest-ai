@@ -1,4 +1,5 @@
 # 🏥 MedPrTest AI
+WebSite and App: https://medprtest-ai.vercel.app/
 
 > AI-powered medical exam preparation platform with intelligent testing and analytics.
 
