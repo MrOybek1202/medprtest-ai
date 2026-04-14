@@ -7,11 +7,7 @@ import {
   Trash2, 
   Edit, 
   Search, 
-  LayoutDashboard, 
-  CheckCircle, 
-  XCircle,
   AlertCircle,
-  TrendingUp,
   Database,
   BarChart3,
   Tags,
@@ -30,9 +26,7 @@ import {
   ResponsiveContainer, 
   PieChart, 
   Pie, 
-  Cell,
-  LineChart,
-  Line
+  Cell
 } from 'recharts';
 import { supabase } from '@/src/lib/supabase';
 import { Question } from '@/src/types';
@@ -558,7 +552,7 @@ export default function AdminPanel() {
                         paddingAngle={5}
                         dataKey="count"
                       >
-                        {topicStats.map((entry, index) => (
+                        {topicStats.map((_, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>

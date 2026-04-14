@@ -21,12 +21,12 @@ npm install
 
 ### 3. Muhit o'zgaruvchilarini sozlash (.env)
 
-Loyiha ildizida `.env` faylini yarating va quyidagi ma'lumotlarni kiriting (Supabase va Gemini kalitlarini o'zingiznikiga almashtiring):
+Loyiha ildizida `.env` faylini yarating va quyidagi ma'lumotlarni kiriting (Supabase va Groq kalitlarini o'zingiznikiga almashtiring):
 
 ```env
 VITE_SUPABASE_URL=sizning_supabase_url
 VITE_SUPABASE_ANON_KEY=sizning_supabase_anon_key
-GEMINI_API_KEY=sizning_gemini_api_key
+GROQ_API_KEY=sizning_groq_api_key
 ```
 
 ### 4. Loyihani ishga tushirish
@@ -40,8 +40,8 @@ Loyiha odatda `http://localhost:3000` manzilida ishga tushadi.
 ## Texnologiyalar
 
 - **Frontend:** React, Vite, Tailwind CSS, Framer Motion
-- **Backend/Database:** Supabase (Auth, PostgreSQL, Real-time)
-- **AI:** Google Gemini API
+- **Database:** Supabase (Auth, PostgreSQL, Real-time)
+- **AI:** Groq API
 - **UI Components:** Lucide React, Sonner (Toasts), Recharts
 
 ## Muallif

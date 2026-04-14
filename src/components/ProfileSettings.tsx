@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { User, Mail, Shield, Bell, Moon, Globe, LogOut, Camera, Save, ChevronRight, Smartphone, Download, Sun, Lock, Eye, EyeOff, RefreshCcw } from 'lucide-react';
+import { User, Shield, Bell, Moon, Globe, LogOut, Camera, Save, ChevronRight, Smartphone, Download, Sun, Lock, Eye, EyeOff, RefreshCcw } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase';
 import { toast } from 'sonner';
 
@@ -8,11 +8,10 @@ interface ProfileSettingsProps {
   userId: string;
   userEmail: string;
   onSignOut: () => void;
-  installPrompt?: any;
   onInstall?: () => void;
 }
 
-export default function ProfileSettings({ userId, userEmail, onSignOut, installPrompt, onInstall }: ProfileSettingsProps) {
+export default function ProfileSettings({ userId, userEmail, onSignOut, onInstall }: ProfileSettingsProps) {
   const [fullName, setFullName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -168,7 +167,6 @@ export default function ProfileSettings({ userId, userEmail, onSignOut, installP
       }
       
       localStorage.removeItem('medtest_ai_cache');
-      localStorage.removeItem('medtest_chat_history');
       
       toast.success('Kesh tozalandi. Ilova qayta yuklanmoqda...');
       setTimeout(() => {

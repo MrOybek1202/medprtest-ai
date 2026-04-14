@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     auth_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT UNIQUE NOT NULL,
     full_name TEXT,
+    avatar_url TEXT,
     role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -109,13 +110,49 @@ VALUES
 ('Fiziologiya', 1, 'Normal holatda inson yuragi bir daqiqada necha marta uradi?', '40-60', '60-90', '90-120', '120-150', '60-90', 'Yurak urishi', 'Sog''lom katta yoshli odamda tinch holatda yurak urishi daqiqasiga 60 dan 90 martagacha bo''ladi.'),
 ('Farmakologiya', 2, 'Gipotenziv dori vositalari guruhiga nima kiradi?', 'Analgin', 'Enapril', 'Aspirin', 'Paratsetamol', 'Enapril', 'Dori vositalari', 'Enapril - bu qon bosimini tushirish uchun ishlatiladigan AAF inhibitori.');
 
--- Chat History table
-CREATE TABLE IF NOT EXISTS public.chat_history (
+-- Chat threads table
+CREATE TABLE IF NOT EXISTS public.chat_threads (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
-    messages JSONB DEFAULT '[]'::jsonb,
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+    title TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
-ALTER TABLE public.chat_history ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can manage their own chat history" ON public.chat_history FOR ALL USING (user_id IN (SELECT id FROM public.users WHERE auth_user_id = auth.uid()) OR EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = auth.uid() AND role = 'admin'));
+-- Chat messages table
+CREATE TABLE IF NOT EXISTS public.chat_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    thread_id UUID REFERENCES public.chat_threads(id) ON DELETE CASCADE NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.chat_threads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage their own chat threads" ON public.chat_threads;
+CREATE POLICY "Users can manage their own chat threads" ON public.chat_threads
+FOR ALL USING (
+    user_id IN (SELECT id FROM public.users WHERE auth_user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = auth.uid() AND role = 'admin')
+) WITH CHECK (
+    user_id IN (SELECT id FROM public.users WHERE auth_user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = auth.uid() AND role = 'admin')
+);
+
+DROP POLICY IF EXISTS "Users can manage their own chat messages" ON public.chat_messages;
+CREATE POLICY "Users can manage their own chat messages" ON public.chat_messages
+FOR ALL USING (
+    thread_id IN (
+        SELECT id FROM public.chat_threads
+        WHERE user_id IN (SELECT id FROM public.users WHERE auth_user_id = auth.uid())
+    )
+    OR EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = auth.uid() AND role = 'admin')
+) WITH CHECK (
+    thread_id IN (
+        SELECT id FROM public.chat_threads
+        WHERE user_id IN (SELECT id FROM public.users WHERE auth_user_id = auth.uid())
+    )
+    OR EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = auth.uid() AND role = 'admin')
+);

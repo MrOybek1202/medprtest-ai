@@ -15,6 +15,7 @@ export interface Database {
           auth_user_id: string
           email: string
           full_name: string | null
+          avatar_url: string | null
           role: string
           created_at: string
         }
@@ -23,6 +24,7 @@ export interface Database {
           auth_user_id: string
           email: string
           full_name?: string | null
+          avatar_url?: string | null
           role?: string
           created_at?: string
         }
@@ -31,9 +33,11 @@ export interface Database {
           auth_user_id?: string
           email?: string
           full_name?: string | null
+          avatar_url?: string | null
           role?: string
           created_at?: string
         }
+        Relationships: []
       }
       questions: {
         Row: {
@@ -84,14 +88,17 @@ export interface Database {
           typical_mistakes?: string[] | null
           created_at?: string
         }
+        Relationships: []
       }
       sessions: {
         Row: {
           id: string
           user_id: string
+          topic: string | null
           status: string
           current_question_index: number
           total_questions: number
+          question_ids: string[] | null
           score_percent: number | null
           created_at: string
           completed_at: string | null
@@ -99,9 +106,11 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
-          status: string
+          topic?: string | null
+          status?: string
           current_question_index?: number
           total_questions: number
+          question_ids?: string[] | null
           score_percent?: number | null
           created_at?: string
           completed_at?: string | null
@@ -109,13 +118,16 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
+          topic?: string | null
           status?: string
           current_question_index?: number
           total_questions?: number
+          question_ids?: string[] | null
           score_percent?: number | null
           created_at?: string
           completed_at?: string | null
         }
+        Relationships: []
       }
       question_attempts: {
         Row: {
@@ -154,6 +166,7 @@ export interface Database {
           is_correct?: boolean
           created_at?: string
         }
+        Relationships: []
       }
       glossary: {
         Row: {
@@ -183,6 +196,7 @@ export interface Database {
           related_terms?: string[] | null
           created_at?: string
         }
+        Relationships: []
       }
       stats: {
         Row: {
@@ -215,7 +229,60 @@ export interface Database {
           recommendation?: string | null
           updated_at?: string
         }
+        Relationships: []
+      }
+      chat_threads: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          id: string
+          thread_id: string
+          role: 'user' | 'assistant'
+          content: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          thread_id: string
+          role: 'user' | 'assistant'
+          content: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          thread_id?: string
+          role?: 'user' | 'assistant'
+          content?: string
+          created_at?: string
+        }
+        Relationships: []
       }
     }
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
+    CompositeTypes: Record<string, never>
   }
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { TrendingUp, Target, Clock, AlertCircle, ArrowRight, BookOpen, Plus, Search, Bell, User, GraduationCap, Smartphone, Download } from 'lucide-react';
-import { UserStats, Session } from '@/src/types';
+import { TrendingUp, Target, Clock, AlertCircle, ArrowRight, Plus, GraduationCap, Smartphone, Download } from 'lucide-react';
+import { UserStats } from '@/src/types';
 import { statsService, questionService, sessionService } from '@/src/services/api';
 import Timer from './Timer';
 import { toast } from 'sonner';
@@ -17,7 +17,6 @@ export default function Dashboard({ userId, onStartTest, installPrompt, onInstal
   const [stats, setStats] = useState<UserStats | null>(null);
   const [topics, setTopics] = useState<string[]>([]);
   const [topicProgress, setTopicProgress] = useState<Record<string, { total: number; solved: number; percentage: number }>>({});
-  const [recentSessions, setRecentSessions] = useState<Session[]>([]);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [solvedCount, setSolvedCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -27,11 +26,10 @@ export default function Dashboard({ userId, onStartTest, installPrompt, onInstal
     const fetchData = async () => {
       setError(null);
       try {
-        const [statsData, topicsData, progressData, sessionsData, totalCount, solved] = await Promise.allSettled([
+        const [statsData, topicsData, progressData, totalCount, solved] = await Promise.allSettled([
           statsService.getUserStats(userId),
           questionService.getTopics(),
           questionService.getTopicProgress(userId),
-          sessionService.getRecentSessions(userId),
           questionService.getTotalQuestionCount(),
           sessionService.getSolvedQuestionsCount(userId)
         ]);
@@ -42,7 +40,6 @@ export default function Dashboard({ userId, onStartTest, installPrompt, onInstal
         else hasError = true;
         
         if (progressData.status === 'fulfilled') setTopicProgress(progressData.value);
-        if (sessionsData.status === 'fulfilled') setRecentSessions(sessionsData.value);
         if (totalCount.status === 'fulfilled') setTotalQuestions(totalCount.value);
         if (solved.status === 'fulfilled') setSolvedCount(solved.value);
 

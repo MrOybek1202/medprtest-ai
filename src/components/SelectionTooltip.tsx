@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, X, Loader2, Plus, BookOpen, Search, Check } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Sparkles, X, Loader2, Plus, Search, Check } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase';
-import { cleanApiUrl } from '@/src/lib/api-utils';
+import { generateDefinition } from '@/src/lib/ai';
 import { toast } from 'sonner';
 
 interface Definition {
@@ -93,23 +93,7 @@ export default function SelectionTooltip({ userId, fullContext, containerId }: S
 
     setLoading(true);
     try {
-      const baseUrl = cleanApiUrl(import.meta.env.VITE_API_URL || '');
-      const apiUrl = `${baseUrl}/api/ai/define`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          term: selection.text,
-          fullContext: fullContext || selection.text
-        })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'AI definition failed');
-      }
-      
-      const data = await response.json();
+      const data = await generateDefinition(selection.text, fullContext || selection.text);
       const newDefinition: Definition = {
         term: selection.text,
         definition: data.definition,
@@ -126,7 +110,7 @@ export default function SelectionTooltip({ userId, fullContext, containerId }: S
       
     } catch (error: any) {
       console.error('Failed to fetch definition:', error);
-      const errorMessage = error.message === 'AI definition failed' ? 'Ma\'noni aniqlashda xatolik yuz berdi' : error.message;
+      const errorMessage = error.message || 'Ma\'noni aniqlashda xatolik yuz berdi';
       toast.error(errorMessage || 'Ma\'noni aniqlashda xatolik yuz berdi');
     } finally {
       setLoading(false);

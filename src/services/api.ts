@@ -4,7 +4,6 @@ import { Question } from '@/src/types';
 
 export const questionService = {
   async getQuestions(limit = 10, difficulty?: number) {
-    console.log(`Fetching questions (limit: ${limit}, difficulty: ${difficulty || 'any'})...`);
     let query = supabase
       .from('questions')
       .select('*');
@@ -19,12 +18,10 @@ export const questionService = {
       console.error('Supabase error fetching questions:', error);
       throw error;
     }
-    console.log('Fetched questions:', data?.length || 0);
     return data;
   },
 
   async getQuestionsByTopic(topic: string, difficulty?: number) {
-    console.log(`Fetching all questions for topic: ${topic} (difficulty: ${difficulty || 'any'})`);
     let query = supabase
       .from('questions')
       .select('*')
@@ -44,7 +41,6 @@ export const questionService = {
   },
 
   async getQuestionsByIds(ids: string[]) {
-    console.log(`Fetching questions by IDs: ${ids.length}`);
     const { data, error } = await supabase
       .from('questions')
       .select('*')
@@ -60,7 +56,6 @@ export const questionService = {
   },
 
   async getTopics() {
-    console.log('Fetching topics...');
     const { data, error } = await supabase
       .from('questions')
       .select('topic');
@@ -71,7 +66,6 @@ export const questionService = {
     }
     // Return unique topics
     const topics = Array.from(new Set(data.map(q => q.topic)));
-    console.log('Fetched topics:', topics.length);
     return topics;
   },
 
@@ -98,7 +92,7 @@ export const questionService = {
   async createQuestion(question: Partial<Question>) {
     const { data, error } = await supabase
       .from('questions')
-      .insert([question])
+      .insert([question as Database['public']['Tables']['questions']['Insert']])
       .select()
       .maybeSingle();
     
@@ -155,17 +149,7 @@ export const questionService = {
       topicTotals[q.topic] = (topicTotals[q.topic] || 0) + 1;
     });
 
-    // 2. Get solved questions per topic for this user
-    const { data: solvedData, error: solvedError } = await supabase
-      .from('question_attempts')
-      .select('question_topic')
-      .eq('user_id', userId);
-    
-    if (solvedError) throw solvedError;
-
-    const topicSolved: Record<string, Set<string>> = {}; // Use Set to count unique questions solved
-    // Wait, question_attempts might have multiple attempts for same question.
-    // Let's get unique question_id per topic.
+    // Count unique solved questions per topic.
     const { data: solvedUniqueData, error: solvedUniqueError } = await supabase
       .from('question_attempts')
       .select('question_id, question_topic')
@@ -210,7 +194,12 @@ export const questionService = {
 };
 
 export const sessionService = {
-  async createSession(userId: string, totalQuestions: number, topic?: string | null, questionIds?: string[]) {
+  async createSession(
+    userId: string,
+    totalQuestions: number,
+    topic?: string | null,
+    questionIds?: string[],
+  ): Promise<Database['public']['Tables']['sessions']['Row']> {
     const payload: any = {
       user_id: userId,
       status: 'active',
@@ -243,14 +232,17 @@ export const sessionService = {
           .select('id, user_id, status, total_questions, current_question_index, created_at')
           .single();
         if (fallbackError) throw fallbackError;
-        return fallbackData;
+        return fallbackData as Database['public']['Tables']['sessions']['Row'];
       }
       throw error;
     }
-    return data;
+    return data as Database['public']['Tables']['sessions']['Row'];
   },
 
-  async getActiveSession(userId: string, topic?: string | null) {
+  async getActiveSession(
+    userId: string,
+    topic?: string | null,
+  ): Promise<Database['public']['Tables']['sessions']['Row'] | null> {
     try {
       let query = supabase
         .from('sessions')
@@ -283,11 +275,11 @@ export const sessionService = {
             .limit(1)
             .maybeSingle();
           if (fallbackError) throw fallbackError;
-          return fallbackData;
+          return fallbackData as Database['public']['Tables']['sessions']['Row'] | null;
         }
         throw error;
       }
-      return data;
+      return data as Database['public']['Tables']['sessions']['Row'] | null;
     } catch (err: any) {
       console.error('Error in getActiveSession:', err);
       return null;
@@ -299,7 +291,7 @@ export const sessionService = {
       .from('sessions')
       .update(updates)
       .eq('id', sessionId)
-      .select('id, user_id, status, total_questions, current_question_index, created_at')
+      .select('*')
       .single();
     
     if (error) throw error;

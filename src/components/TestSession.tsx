@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, XCircle, ArrowRight, Lightbulb, AlertTriangle, MessageSquare, GraduationCap, Clock, Target, ChevronLeft, Video, ExternalLink, Image as ImageIcon, Info, Settings, HelpCircle, Brain, BookMarked } from 'lucide-react';
-import { Question, Session, Attempt } from '@/src/types';
+import { CheckCircle2, XCircle, ArrowRight, Lightbulb, AlertTriangle, GraduationCap, Clock, Target, ChevronLeft, Video, ExternalLink, Settings, Brain, BookMarked } from 'lucide-react';
+import { Question, Session } from '@/src/types';
 import { questionService, sessionService, attemptService, statsService } from '@/src/services/api';
 import { supabase } from '@/src/lib/supabase';
-import { cleanApiUrl } from '@/src/lib/api-utils';
+import { generateExplanation } from '@/src/lib/ai';
 import { toast } from 'sonner';
 
 interface AIExplanation {
@@ -43,43 +43,36 @@ export default function TestSession({ userId, topic, onComplete }: TestSessionPr
   const [startTime, setStartTime] = useState<number>(Date.now());
   const [timeSpent, setTimeSpent] = useState<number>(0);
   const [answersMap, setAnswersMap] = useState<Record<string, string>>({});
+  const initKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('medtest_resume_test', '1');
+    if (topic) {
+      localStorage.setItem('medtest_test_topic', topic);
+      localStorage.setItem('selectedTopic', topic);
+    }
+  }, [topic]);
+
+  const validSources = useMemo(() => {
+    return (aiData?.sources || []).filter((source) => /https?:\/\/[^\s)]+/.test(source));
+  }, [aiData]);
 
   const fetchAIData = async (question: Question, answer: string) => {
     const cacheKey = `${question.id}:${answer}`;
     if (aiCache[cacheKey]) {
-      console.log('Using client-side AI cache');
       setAiData(aiCache[cacheKey]);
       return;
     }
 
     setAiLoading(true);
-    const baseUrl = cleanApiUrl(import.meta.env.VITE_API_URL || '');
-    const apiUrl = `${baseUrl}/api/ai/explain`;
-    console.log(`Calling ${apiUrl}... full URL: ${apiUrl.startsWith('http') ? apiUrl : window.location.origin + apiUrl}`);
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
 
     try {
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: question.stem,
-          answer: answer,
-          context: `To'g'ri javob: ${question.correct_option}. Mavzu: ${question.topic}`
-        }),
-        signal: controller.signal
+      const data = await generateExplanation({
+        question: question.stem,
+        selectedAnswer: answer,
+        correctAnswer: question.correct_option,
+        topic: question.topic,
       });
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `AI API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('AI explanation received:', data);
       setAiData(data);
       const newCache = { ...aiCache, [cacheKey]: data };
       setAiCache(newCache);
@@ -91,7 +84,7 @@ export default function TestSession({ userId, topic, onComplete }: TestSessionPr
     } catch (error: any) {
       console.error('Failed to fetch AI data:', error);
       setAiData({
-        explanation: `Kechirasiz, AI tushuntirishini yuklashda xatolik yuz berdi: ${error.message === 'The user aborted a request.' ? 'So\'rov vaqti tugadi (20s)' : error.message}. Iltimos, internet aloqasini tekshiring yoki birozdan so'ng qayta urinib ko'ring.`,
+        explanation: `Kechirasiz, AI tushuntirishini yuklashda xatolik yuz berdi: ${error.message}. Iltimos, birozdan so'ng qayta urinib ko'ring.`,
         keyPoints: [],
         typicalMistakes: [],
         sources: []
@@ -103,12 +96,17 @@ export default function TestSession({ userId, topic, onComplete }: TestSessionPr
 
   useEffect(() => {
     const initSession = async () => {
+      const initKey = `${userId}:${topic || 'all'}`;
+      if (initKeyRef.current === initKey) {
+        return;
+      }
+      initKeyRef.current = initKey;
+
       try {
         // Check for active session to resume
         const activeSession = await sessionService.getActiveSession(userId, topic);
         
         if (activeSession && activeSession.question_ids && activeSession.question_ids.length > 0) {
-          console.log('Resuming active session:', activeSession.id);
           const qs = await questionService.getQuestionsByIds(activeSession.question_ids);
           setQuestions(qs);
           setSession(activeSession);
@@ -148,7 +146,6 @@ export default function TestSession({ userId, topic, onComplete }: TestSessionPr
           } else {
             // For random practice, use adaptive difficulty
             const recommendedDifficulty = await questionService.getRecommendedDifficulty(userId);
-            console.log('Recommended difficulty level for practice:', recommendedDifficulty);
             
             qs = await questionService.getQuestions(20, recommendedDifficulty);
             if (!qs || qs.length < 5) {
@@ -222,7 +219,6 @@ export default function TestSession({ userId, topic, onComplete }: TestSessionPr
     setAiLoading(true);
 
     try {
-      console.log('Submitting answer and fetching AI explanation...');
       await attemptService.recordAttempt({
         user_id: userId,
         session_id: session.id,
@@ -579,7 +575,7 @@ export default function TestSession({ userId, topic, onComplete }: TestSessionPr
                         </section>
                       )}
 
-                      {aiData?.sources && aiData.sources.length > 0 && (
+                      {validSources.length > 0 && (
                         <section className="space-y-4">
                           <div className="flex items-center gap-3 text-slate-400">
                             <div className="w-8 h-8 rounded-lg bg-slate-500/10 flex items-center justify-center">
@@ -588,7 +584,7 @@ export default function TestSession({ userId, topic, onComplete }: TestSessionPr
                             <h4 className="font-bold uppercase text-[11px] tracking-[0.2em]">Manbalar</h4>
                           </div>
                           <div className="bg-[#1E293B]/30 p-6 rounded-[32px] border border-slate-800/50 backdrop-blur-sm divide-y divide-slate-800/50">
-                            {aiData.sources.map((source, i) => {
+                            {validSources.map((source, i) => {
                               const urlMatch = source.match(/https?:\/\/[^\s)]+/);
                               const url = urlMatch ? urlMatch[0] : null;
                               const cleanSource = source.replace(/\(https?:\/\/[^\s)]+\)/, '').trim();
@@ -612,12 +608,7 @@ export default function TestSession({ userId, topic, onComplete }: TestSessionPr
                                         <ExternalLink size={14} />
                                         <span>Manbani ko'rish (Link)</span>
                                       </a>
-                                    ) : (
-                                      <div className="flex items-center gap-2 text-[10px] text-amber-500/80 font-bold uppercase tracking-wider bg-amber-500/5 px-3 py-1.5 rounded-lg border border-amber-500/10">
-                                        <AlertTriangle size={12} />
-                                        <span>To'g'ridan-to'g'ri havola topilmadi</span>
-                                      </div>
-                                    )}
+                                    ) : null}
                                   </div>
                                 </div>
                               );

@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { ArrowRight, Sparkles, Brain, Download } from "lucide-react";
+import { ArrowRight, Sparkles, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface HeroProps {

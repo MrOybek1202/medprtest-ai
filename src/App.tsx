@@ -22,13 +22,30 @@ import MobileNav from './components/mobile/MobileNav';
 import SelectionTooltip from './components/SelectionTooltip';
 
 type Tab = 'dashboard' | 'topics' | 'weak-practice' | 'glossary' | 'profile' | 'settings' | 'help' | 'test' | 'admin';
+const TEST_RESUME_KEY = 'medtest_resume_test';
+const TEST_TOPIC_KEY = 'medtest_test_topic';
+
+const getInitialTab = (): Tab => {
+    if (localStorage.getItem(TEST_RESUME_KEY) === '1' || localStorage.getItem('activeTab') === 'test') {
+        return 'test';
+    }
+    const savedTab = localStorage.getItem('activeTab');
+    if (savedTab && ['dashboard', 'topics', 'weak-practice', 'glossary', 'profile', 'settings', 'help', 'test', 'admin'].includes(savedTab)) {
+        return savedTab as Tab;
+    }
+    return 'dashboard';
+};
+
+const getInitialTopic = (): string | null => {
+    return localStorage.getItem('selectedTopic') || localStorage.getItem(TEST_TOPIC_KEY);
+};
 
 export default function App() {
   const { user, loading: authLoading, signIn, signUp, signInWithGoogle, signOut, resetPassword } = useAuth();
   const [internalUserId, setInternalUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'user' | 'admin'>('user');
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(getInitialTopic);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -76,6 +93,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (selectedTopic !== null) {
+        localStorage.setItem('selectedTopic', selectedTopic);
+        localStorage.setItem(TEST_TOPIC_KEY, selectedTopic);
+    } else {
+        localStorage.removeItem('selectedTopic');
+        localStorage.removeItem(TEST_TOPIC_KEY);
+    }
+  }, [selectedTopic]);
+
+  useEffect(() => {
     // Theme initialization
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'dark') {
@@ -111,10 +142,6 @@ export default function App() {
             } else {
               setUserRole(profile.role as 'user' | 'admin');
             }
-
-            if (profile.role === 'admin' || isAdminEmail) {
-              setActiveTab('admin');
-            }
           } else {
             // Check if this is the designated admin email
             const isAdminEmail = user.email?.toLowerCase() === 'oybek.karimjonov1202@gmail.com';
@@ -134,9 +161,6 @@ export default function App() {
               setInternalUserId(newUser.id);
               setUserRole(newUser.role as 'user' | 'admin');
               toast.success('Profil muvaffaqiyatli yaratildi');
-              if (newUser.role === 'admin') {
-                setActiveTab('admin');
-              }
               try {
                 await supabase.from('stats').insert({
                   user_id: newUser.id,
@@ -155,8 +179,50 @@ export default function App() {
         }
       };
       checkProfile();
+    } else {
+      setInternalUserId(null);
+      setUserRole('user');
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !internalUserId || userRole === 'admin') return;
+
+    const checkSession = async () => {
+      const { data } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', internalUserId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data?.status === 'active') {
+        localStorage.setItem(TEST_RESUME_KEY, '1');
+        localStorage.setItem('activeTab', 'test');
+        if (data.topic) {
+          localStorage.setItem(TEST_TOPIC_KEY, data.topic);
+          setSelectedTopic((currentTopic) => currentTopic ?? data.topic);
+        }
+        setActiveTab('test');
+      }
+    };
+
+    const handleResumeCheck = () => {
+      if (document.visibilityState === 'visible') {
+        void checkSession();
+      }
+    };
+
+    void checkSession();
+    window.addEventListener('pageshow', handleResumeCheck);
+    document.addEventListener('visibilitychange', handleResumeCheck);
+
+    return () => {
+      window.removeEventListener('pageshow', handleResumeCheck);
+      document.removeEventListener('visibilitychange', handleResumeCheck);
+    };
+  }, [user, internalUserId, userRole]);
 
   const handleAuth = async (e: FormEvent) => {
     e.preventDefault();
@@ -540,7 +606,13 @@ export default function App() {
             )}
 
             <button
-              onClick={() => signOut()}
+              onClick={() => {
+                localStorage.removeItem('activeTab');
+                localStorage.removeItem('selectedTopic');
+                localStorage.removeItem(TEST_RESUME_KEY);
+                localStorage.removeItem(TEST_TOPIC_KEY);
+                signOut();
+              }}
               className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all ${!isSidebarOpen && 'justify-center'}`}
               title="Chiqish"
             >
@@ -605,6 +677,8 @@ export default function App() {
                   userId={internalUserId} 
                   onStartTest={() => {
                     setSelectedTopic(null);
+                    localStorage.setItem(TEST_RESUME_KEY, '1');
+                    localStorage.removeItem(TEST_TOPIC_KEY);
                     setActiveTab('test');
                   }} 
                   installPrompt={deferredPrompt}
@@ -617,12 +691,20 @@ export default function App() {
               {activeTab === 'topics' && internalUserId && (
                 <Topics userId={internalUserId} onStartTopicTest={(topic) => {
                   setSelectedTopic(topic);
+                  localStorage.setItem(TEST_RESUME_KEY, '1');
+                  localStorage.setItem(TEST_TOPIC_KEY, topic);
                   setActiveTab('test');
                 }} />
               )}
               {activeTab === 'weak-practice' && internalUserId && (
                 <WeakPractice userId={internalUserId} onStartPractice={(topic) => {
                   setSelectedTopic(topic || null);
+                  localStorage.setItem(TEST_RESUME_KEY, '1');
+                  if (topic) {
+                    localStorage.setItem(TEST_TOPIC_KEY, topic);
+                  } else {
+                    localStorage.removeItem(TEST_TOPIC_KEY);
+                  }
                   setActiveTab('test');
                 }} />
               )}
@@ -637,6 +719,9 @@ export default function App() {
                       setActiveTab('dashboard');
                     }
                     setSelectedTopic(null);
+                    localStorage.removeItem(TEST_RESUME_KEY);
+                    localStorage.removeItem(TEST_TOPIC_KEY);
+                    localStorage.removeItem('selectedTopic');
                   }} 
                 />
               )}
@@ -647,8 +732,13 @@ export default function App() {
                 <ProfileSettings 
                   userId={internalUserId} 
                   userEmail={user.email || ''} 
-                  onSignOut={signOut}
-                  installPrompt={deferredPrompt}
+                  onSignOut={() => {
+                    localStorage.removeItem('activeTab');
+                    localStorage.removeItem('selectedTopic');
+                    localStorage.removeItem(TEST_RESUME_KEY);
+                    localStorage.removeItem(TEST_TOPIC_KEY);
+                    signOut();
+                  }}
                   onInstall={handleInstallApp}
                 />
               )}

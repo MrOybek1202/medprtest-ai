@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { GraduationCap, ArrowRight, Search, BookOpen, Clock, Target } from 'lucide-react';
+import { GraduationCap, ArrowRight, Search } from 'lucide-react';
 import { questionService } from '@/src/services/api';
 import { toast } from 'sonner';
 
