@@ -1,130 +1,123 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { HeartPulse, Menu, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button'
+import { HeartPulse, Menu, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useEffect, useState } from 'react'
 
 interface NavbarProps {
-  onSignIn: () => void;
-  onGetStarted: () => void;
+  onSignIn: () => void
+  onGetStarted: () => void
 }
 
-const Navbar = ({ onSignIn, onGetStarted }: NavbarProps) => {
-  const [isOpen, setIsOpen] = useState(false);
+const links = [
+  { href: '#imkoniyatlar', label: 'Imkoniyatlar' },
+  { href: '#jarayon', label: 'Jarayon' },
+  { href: '#boshlash', label: 'Boshlash' },
+  { href: '#haqida', label: 'Haqida' },
+]
+
+export default function Navbar({ onSignIn }: NavbarProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 10)
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   return (
-    <motion.nav
-      initial={{ y: -20, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.5 }}
-      className="fixed top-0 left-0 right-0 z-50 border-b border-slate-100 bg-white/80 backdrop-blur-xl"
+    <header
+      className={`fixed inset-x-0 top-0 z-50 flex justify-center transition-all duration-500 ${
+        scrolled ? 'pt-4' : 'pt-0'
+      }`}
     >
-      <div className="container mx-auto flex h-20 items-center justify-between px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1B4D3E]">
-            <HeartPulse className="h-6 w-6 text-white" />
+      <div
+        className={`w-full transition-all duration-500 ${
+          scrolled
+            ? 'max-w-[85%] px-4 rounded-[25px] bg-paper/60 backdrop-blur-xl border border-ink/10 '
+            : 'max-w-[1280px] bg-transparent'
+        }`}
+      >
+        <nav className='flex items-center justify-between px-4 py-3 md:px-6 md:py-3'>
+          <a href='#' className='flex items-center gap-3'>
+            <div className='flex size-10 items-center justify-center rounded-full bg-gradient-editorial text-paper shadow-soft'>
+              <HeartPulse className='size-5' />
+            </div>
+            <span
+              className={`font-display text-xl font-bold tracking-tight text-ink transition-all duration-300 ${
+                scrolled ? 'hidden sm:inline' : ''
+              }`}
+            >
+              MedTestAI
+            </span>
+          </a>
+
+          <div className='hidden items-center gap-8 lg:flex'>
+            {links.map(link => (
+              <a
+                key={link.href}
+                href={link.href}
+                className={`text-sm font-bold ${scrolled ? 'text-ink' : 'text-muted-foreground'} transition-colors hover:text-ink`}
+              >
+                {link.label}
+              </a>
+            ))}
           </div>
-          <span className="font-display text-xl font-bold text-slate-900">
-            MedTest <span className="text-[#1B4D3E]">AI</span>
-          </span>
-        </div>
 
-        <div className="hidden items-center gap-10 lg:flex">
-          <a href="#features" className="text-sm font-bold text-slate-500 transition-colors hover:text-[#1B4D3E] uppercase tracking-widest">
-            Imkoniyatlar
-          </a>
-          <a href="#how-it-works" className="text-sm font-bold text-slate-500 transition-colors hover:text-[#1B4D3E] uppercase tracking-widest">
-            Qanday ishlaydi
-          </a>
-          <a href="#pricing" className="text-sm font-bold text-slate-500 transition-colors hover:text-[#1B4D3E] uppercase tracking-widest">
-            Narxlar
-          </a>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-4">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="text-slate-500 font-bold hover:text-[#1B4D3E] hover:bg-slate-50"
+          <div className='hidden lg:block'>
+            <Button
               onClick={onSignIn}
+              className='rounded-full bg-ink p-5 text-paper hover:bg-ink/90'
             >
               Kirish
             </Button>
-            <Button 
-              size="sm" 
-              className="bg-[#1B4D3E] hover:bg-[#153a2f] font-bold px-6 rounded-xl shadow-lg shadow-[#1B4D3E]/20"
-              onClick={onGetStarted}
-            >
-              Boshlash
-            </Button>
           </div>
-          <button 
-            onClick={() => setIsOpen(!isOpen)}
-            className="lg:hidden p-2 text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
-          >
-            {isOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-      </div>
 
-      {/* Mobile Menu */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="lg:hidden border-t border-slate-100 bg-white overflow-hidden"
+          <button
+            onClick={() => setIsOpen(v => !v)}
+            className='flex size-11 items-center justify-center rounded-full border border-ink/10 bg-paper/90 text-ink backdrop-blur-xl transition-colors hover:bg-paper lg:hidden'
+            aria-label='Menu'
           >
-            <div className="container mx-auto px-6 py-8 flex flex-col gap-6">
-              <a 
-                href="#features" 
-                onClick={() => setIsOpen(false)}
-                className="text-lg font-bold text-slate-900 hover:text-[#1B4D3E] transition-colors"
-              >
-                Imkoniyatlar
-              </a>
-              <a 
-                href="#how-it-works" 
-                onClick={() => setIsOpen(false)}
-                className="text-lg font-bold text-slate-900 hover:text-[#1B4D3E] transition-colors"
-              >
-                Qanday ishlaydi
-              </a>
-              <a 
-                href="#pricing" 
-                onClick={() => setIsOpen(false)}
-                className="text-lg font-bold text-slate-900 hover:text-[#1B4D3E] transition-colors"
-              >
-                Narxlar
-              </a>
-              <div className="pt-4 flex flex-col gap-4">
-                <Button 
-                  variant="outline" 
-                  className="w-full py-6 rounded-2xl font-bold border-slate-200"
+            {isOpen ? <X className='size-5' /> : <Menu className='size-5' />}
+          </button>
+        </nav>
+
+        {/* Mobile menu — only shown when NOT scrolled pill mode, or override as needed */}
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className={`lg:hidden border-t border-ink/10 bg-paper ${
+                scrolled ? 'rounded-b-3xl' : ''
+              }`}
+            >
+              <div className='mx-4 flex flex-col gap-2 pb-6 pt-4'>
+                {links.map(link => (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setIsOpen(false)}
+                    className='rounded-2xl px-4 py-3 text-base text-muted-foreground transition-colors hover:bg-ink/5 hover:text-ink'
+                  >
+                    {link.label}
+                  </a>
+                ))}
+                <Button
                   onClick={() => {
-                    setIsOpen(false);
-                    onSignIn();
+                    setIsOpen(false)
+                    onSignIn()
                   }}
+                  className='mt-2 rounded-2xl bg-ink py-6 text-paper hover:bg-ink/90'
                 >
                   Kirish
                 </Button>
-                <Button 
-                  className="w-full py-6 rounded-2xl font-bold bg-[#1B4D3E] hover:bg-[#153a2f]"
-                  onClick={() => {
-                    setIsOpen(false);
-                    onGetStarted();
-                  }}
-                >
-                  Boshlash
-                </Button>
               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.nav>
-  );
-};
-
-export default Navbar;
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </header>
+  )
+}

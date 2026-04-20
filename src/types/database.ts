@@ -279,6 +279,42 @@ export interface Database {
         }
         Relationships: []
       }
+      focus_timers: {
+        Row: {
+          id: string
+          auth_user_id: string
+          mode: 'countdown' | 'elapsed'
+          start_time: number | null
+          duration: number
+          is_running: boolean
+          elapsed_ms: number
+          updated_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          auth_user_id: string
+          mode?: 'countdown' | 'elapsed'
+          start_time?: number | null
+          duration?: number
+          is_running?: boolean
+          elapsed_ms?: number
+          updated_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          auth_user_id?: string
+          mode?: 'countdown' | 'elapsed'
+          start_time?: number | null
+          duration?: number
+          is_running?: boolean
+          elapsed_ms?: number
+          updated_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

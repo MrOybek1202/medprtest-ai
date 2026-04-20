@@ -32,16 +32,16 @@ const MobileNav: React.FC<MobileNavProps> = ({ activeTab, onTabChange, userRole 
             onClick={() => onTabChange(tab.id)}
             className="flex flex-col items-center gap-1 relative flex-1 min-w-0"
           >
-            <div className={`p-1.5 sm:p-2 rounded-xl transition-all ${isActive ? 'text-[#1B4D3E] dark:text-[#2d7a63]' : 'text-slate-400 dark:text-slate-500'}`}>
+            <div className={`rounded-xl p-1.5 transition-all sm:p-2 ${isActive ? 'text-[#2c5ff2]' : 'text-slate-400 dark:text-slate-500'}`}>
               <tab.icon size={isMobile ? 20 : 24} strokeWidth={isActive ? 2.5 : 2} />
             </div>
             {isActive && (
               <motion.div
                 layoutId="activeTab"
-                className="absolute -top-1 w-1 h-1 bg-[#1B4D3E] dark:bg-[#2d7a63] rounded-full"
+                className="absolute -top-1 h-1 w-1 rounded-full bg-[#2c5ff2]"
               />
             )}
-            <span className={`text-[10px] font-bold ${isActive ? 'text-[#1B4D3E] dark:text-[#2d7a63]' : 'text-slate-400 dark:text-slate-500'}`}>
+            <span className={`text-[10px] font-bold ${isActive ? 'text-[#2c5ff2]' : 'text-slate-400 dark:text-slate-500'}`}>
               {tab.label}
             </span>
           </button>

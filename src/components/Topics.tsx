@@ -73,11 +73,11 @@ export default function Topics({ userId, onStartTopicTest }: TopicsProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
-            className="bg-white dark:bg-slate-900 p-10 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:shadow-[#1B4D3E]/5 transition-all group cursor-pointer flex flex-col"
+            className="group flex cursor-pointer flex-col rounded-[40px] border border-[#dbe4f2] bg-white/92 p-10 shadow-[0_20px_44px_rgba(16,35,71,0.06)] transition-all hover:shadow-[0_24px_56px_rgba(44,95,242,0.12)] dark:border-slate-800 dark:bg-slate-900"
             onClick={() => onStartTopicTest(topic)}
           >
             <div className="flex justify-between items-start mb-6">
-              <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 group-hover:bg-[#1B4D3E]/10 group-hover:text-[#1B4D3E] transition-colors">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#edf3ff] text-[#2c5ff2] transition-colors group-hover:bg-[#dfe9ff] dark:bg-slate-800 dark:text-slate-500">
                 <GraduationCap size={28} />
               </div>
               <div className="bg-slate-50 dark:bg-slate-800 px-3 py-1 rounded-full text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
@@ -85,7 +85,7 @@ export default function Topics({ userId, onStartTopicTest }: TopicsProps) {
               </div>
             </div>
             
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4 group-hover:text-[#1B4D3E] transition-colors line-clamp-2 min-h-[3.5rem]">
+            <h3 className="mb-4 min-h-[3.5rem] line-clamp-2 text-xl font-bold text-slate-900 transition-colors group-hover:text-[#2c5ff2] dark:text-white">
               {topic}
             </h3>
 
@@ -104,12 +104,12 @@ export default function Topics({ userId, onStartTopicTest }: TopicsProps) {
                 <motion.div 
                   initial={{ width: 0 }}
                   animate={{ width: `${progress[topic]?.percentage || 0}%` }}
-                  className="h-full bg-[#1B4D3E]"
+                  className="h-full bg-[#2c5ff2]"
                 />
               </div>
             </div>
 
-            <button className="mt-auto w-full bg-slate-50 dark:bg-slate-800 group-hover:bg-[#1B4D3E] text-slate-400 dark:text-slate-500 group-hover:text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm">
+            <button className="mt-auto flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-50 py-4 text-sm font-bold text-slate-500 transition-all group-hover:bg-[#2c5ff2] group-hover:text-white dark:bg-slate-800 dark:text-slate-500">
               Testni boshlash
               <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
             </button>

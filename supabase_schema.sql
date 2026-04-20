@@ -97,7 +97,50 @@ CREATE POLICY "Admins can manage all questions" ON public.questions FOR ALL USIN
     EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = auth.uid() AND role = 'admin')
 );
 
-CREATE POLICY "Users can manage their own data" ON public.users FOR ALL USING (auth.uid() = auth_user_id OR EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = auth.uid() AND role = 'admin'));
+DROP POLICY IF EXISTS "Users can manage their own data" ON public.users;
+DROP POLICY IF EXISTS "Users can read own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
+DROP POLICY IF EXISTS "Admins can read all users" ON public.users;
+DROP POLICY IF EXISTS "Admins can manage all users" ON public.users;
+
+CREATE POLICY "Users can read own profile" ON public.users
+FOR SELECT USING (auth.uid() = auth_user_id);
+
+CREATE POLICY "Users can insert own profile" ON public.users
+FOR INSERT WITH CHECK (auth.uid() = auth_user_id);
+
+CREATE POLICY "Users can update own profile" ON public.users
+FOR UPDATE USING (auth.uid() = auth_user_id)
+WITH CHECK (auth.uid() = auth_user_id);
+
+CREATE POLICY "Admins can read all users" ON public.users
+FOR SELECT USING (
+    EXISTS (
+        SELECT 1
+        FROM public.users admin_user
+        WHERE admin_user.auth_user_id = auth.uid()
+          AND admin_user.role = 'admin'
+    )
+);
+
+CREATE POLICY "Admins can manage all users" ON public.users
+FOR ALL USING (
+    EXISTS (
+        SELECT 1
+        FROM public.users admin_user
+        WHERE admin_user.auth_user_id = auth.uid()
+          AND admin_user.role = 'admin'
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1
+        FROM public.users admin_user
+        WHERE admin_user.auth_user_id = auth.uid()
+          AND admin_user.role = 'admin'
+    )
+);
 CREATE POLICY "Users can manage their own sessions" ON public.sessions FOR ALL USING (user_id IN (SELECT id FROM public.users WHERE auth_user_id = auth.uid()) OR EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = auth.uid() AND role = 'admin'));
 CREATE POLICY "Users can manage their own attempts" ON public.question_attempts FOR ALL USING (user_id IN (SELECT id FROM public.users WHERE auth_user_id = auth.uid()) OR EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = auth.uid() AND role = 'admin'));
 CREATE POLICY "Users can manage their own stats" ON public.stats FOR ALL USING (user_id IN (SELECT id FROM public.users WHERE auth_user_id = auth.uid()) OR EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = auth.uid() AND role = 'admin'));
@@ -131,6 +174,21 @@ CREATE TABLE IF NOT EXISTS public.chat_messages (
 ALTER TABLE public.chat_threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 
+-- Focus timers table (cross-device timer sync by auth user)
+CREATE TABLE IF NOT EXISTS public.focus_timers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    auth_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'countdown' CHECK (mode IN ('countdown', 'elapsed')),
+    start_time BIGINT,
+    duration INTEGER NOT NULL DEFAULT 1800,
+    is_running BOOLEAN NOT NULL DEFAULT false,
+    elapsed_ms BIGINT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.focus_timers ENABLE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS "Users can manage their own chat threads" ON public.chat_threads;
 CREATE POLICY "Users can manage their own chat threads" ON public.chat_threads
 FOR ALL USING (
@@ -156,3 +214,8 @@ FOR ALL USING (
     )
     OR EXISTS (SELECT 1 FROM public.users WHERE auth_user_id = auth.uid() AND role = 'admin')
 );
+
+DROP POLICY IF EXISTS "Users can manage own focus timers" ON public.focus_timers;
+CREATE POLICY "Users can manage own focus timers" ON public.focus_timers
+FOR ALL USING (auth.uid() = auth_user_id)
+WITH CHECK (auth.uid() = auth_user_id);

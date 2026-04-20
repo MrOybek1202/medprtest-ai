@@ -1,41 +1,82 @@
-import { motion } from "motion/react";
-import { ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button'
+import { ArrowUpRight } from 'lucide-react'
+import { motion } from 'motion/react'
+import Marquee from './Marquee'
 
 interface CTAProps {
-  onGetStarted: () => void;
+	onGetStarted: () => void
 }
 
-const CTA = ({ onGetStarted }: CTAProps) => {
-  return (
-    <section className="py-24">
-      <div className="container mx-auto px-6">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-          className="relative mx-auto max-w-4xl overflow-hidden rounded-[40px] bg-[#1B4D3E] p-12 text-center md:p-16 shadow-2xl shadow-[#1B4D3E]/20"
-        >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_0%,rgba(255,255,255,0.15),transparent_60%)]" />
-          <h2 className="relative mb-6 font-display text-3xl font-bold text-white md:text-5xl">
-            Shifokordek fikrlashga tayyormisiz?
-          </h2>
-          <p className="relative mx-auto mb-10 max-w-xl text-lg text-slate-200">
-            Shunchaki yodlashni to'xtating va minglab talabalar kabi klinik fikrlashni shakllantiring.
-          </p>
-          <Button
-            size="lg"
-            variant="secondary"
-            onClick={onGetStarted}
-            className="relative gap-2 px-10 py-7 text-lg font-bold bg-white text-[#1B4D3E] hover:bg-slate-100 rounded-2xl"
-          >
-            Bepul boshlash
-            <ArrowRight className="h-5 w-5" />
-          </Button>
-        </motion.div>
-      </div>
-    </section>
-  );
-};
+export default function CTA({ onGetStarted }: CTAProps) {
+	return (
+		<section id='boshlash' className='bg-paper px-4 py-16 md:px-8 md:py-24'>
+			<div className='container'>
+				<motion.div
+					initial={{ opacity: 0, y: 30 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true, amount: 0.2 }}
+					transition={{ duration: 0.7 }}
+					className='relative overflow-hidden rounded-[36px] bg-gradient-editorial p-10 text-paper shadow-editorial md:p-20 grain'
+				>
+					{/* Decorative serif background */}
+					<span
+						aria-hidden
+						className='pointer-events-none absolute -right-10 -top-20 select-none font-display text-[20rem] italic leading-none text-paper/5 md:text-[28rem]'
+					>
+						ai
+					</span>
 
-export default CTA;
+					<div className='relative grid gap-12 lg:grid-cols-12'>
+						<div className='lg:col-span-8'>
+							<p className='font-mono-c text-xs uppercase tracking-[0.3em] text-paper/60'>
+								— Hozir boshlang
+							</p>
+							<h2 className='mt-6 font-display text-5xl font-light leading-[0.95] tracking-tight md:text-7xl lg:text-8xl'>
+								Tibbiy testlarni
+								<br />
+								<em className='italic text-accent'>tartibli</em> tayyorlang.
+							</h2>
+							<p className='mt-8 max-w-xl text-lg leading-relaxed text-paper/80 md:text-xl'>
+								MedTest AI sizga savol, AI sharh, zaif mavzu va o'sishni bitta
+								zamonaviy oqimda taqdim etadi.
+							</p>
+						</div>
+
+						<div className='flex flex-col justify-end gap-4 lg:col-span-4'>
+							<Button
+								onClick={onGetStarted}
+								size='lg'
+								className='group h-auto justify-between rounded-full bg-paper px-8 py-7 text-lg font-medium text-ink hover:bg-accent hover:text-accent-foreground'
+							>
+								Hozir boshlash
+								<ArrowUpRight className='size-5 transition-transform group-hover:rotate-45' />
+							</Button>
+							<p className='font-mono-c text-xs uppercase tracking-widest text-paper/50'>
+								Bepul · Kredit karta talab qilinmaydi
+							</p>
+						</div>
+					</div>
+
+					<div className='relative mt-16 border-t border-paper/15 pt-8'>
+						<Marquee>
+							{[
+								'18K+ Foydalanuvchi',
+								'99.8% AI aniqlik',
+								"12s o'rtacha javob",
+								"12+ yo'nalish",
+								'4.9★ baho',
+							].map(t => (
+								<span
+									key={t}
+									className='font-display text-2xl italic text-paper/70 md:text-3xl'
+								>
+									{t} <span className='mx-6 text-accent'>●</span>
+								</span>
+							))}
+						</Marquee>
+					</div>
+				</motion.div>
+			</div>
+		</section>
+	)
+}
