@@ -27,7 +27,7 @@ export function useAuth() {
   const signInWithGoogle = () => supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: window.location.origin,
+      redirectTo: `${window.location.origin}${window.location.pathname}`,
       queryParams: {
         access_type: 'offline',
         prompt: 'consent',
@@ -36,7 +36,7 @@ export function useAuth() {
   });
   const signOut = () => supabase.auth.signOut();
   const resetPassword = (email: string) => supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}?type=recovery`,
+    redirectTo: `${window.location.origin}${window.location.pathname}?type=recovery`,
   });
   const updatePassword = (password: string) => supabase.auth.updateUser({ password });
 

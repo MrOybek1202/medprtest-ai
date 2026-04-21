@@ -1,0 +1,3 @@
+[31mWebSocket server error: Port 24678 is already in use[39m
+Port 3004 band. .env ichida boshqa PORT tanlang yoki eski serverni to'xtating.
+^C

@@ -1,0 +1,5 @@
+
+> react-example@0.0.0 dev
+> tsx server.ts
+
+◇ injected env (18) from .env // tip: ⌘ override existing { override: true }

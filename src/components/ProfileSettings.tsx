@@ -22,7 +22,9 @@ import { toast } from 'sonner'
 
 interface ProfileSettingsProps {
 	userId: string
+	authUserId: string
 	userEmail: string
+	authProvider?: string
 	onSignOut: () => void
 	onInstall?: () => void
 	mode: 'profile' | 'settings'
@@ -34,6 +36,22 @@ interface HeatPoint {
 	key: string
 	count: number
 	date: Date
+}
+
+const buildLocalDateKey = (date: Date) =>
+	`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+		2,
+		'0',
+	)}-${String(date.getDate()).padStart(2, '0')}`
+
+const buildLocalDateFromKey = (key: string) => {
+	const [year, month, day] = key.split('-').map(Number)
+	return new Date(year, month - 1, day, 12, 0, 0, 0)
+}
+
+const getMondayBasedDayIndex = (date: Date) => {
+	const day = date.getDay()
+	return day === 0 ? 6 : day - 1
 }
 
 function ActivityHeatmap({ data }: { data: HeatPoint[] }) {
@@ -83,9 +101,8 @@ function ActivityHeatmap({ data }: { data: HeatPoint[] }) {
 	if (cur > streak) streak = cur
 
 	// Build weeks grid
-	const firstDay = data[0]?.date.getDay() ?? 1
-	const pad = firstDay === 0 ? 6 : firstDay - 1
-	const paddedDays: (HeatPoint | null)[] = [...Array(pad).fill(null), ...data]
+	const firstDay = data[0] ? getMondayBasedDayIndex(data[0].date) : 0
+	const paddedDays: (HeatPoint | null)[] = [...Array(firstDay).fill(null), ...data]
 	const weeks: (HeatPoint | null)[][] = []
 	for (let i = 0; i < paddedDays.length; i += 7) {
 		weeks.push(paddedDays.slice(i, i + 7))
@@ -105,7 +122,7 @@ function ActivityHeatmap({ data }: { data: HeatPoint[] }) {
 		'Noy',
 		'Dek',
 	]
-	const dayLabels = ['Du', '', 'Ch', '', 'Ju', '', '']
+	const dayLabels = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya']
 
 	// Month label positions
 	const monthLabels: { label: string; col: number }[] = []
@@ -122,15 +139,16 @@ function ActivityHeatmap({ data }: { data: HeatPoint[] }) {
 		const rect = containerRef.current?.getBoundingClientRect()
 		if (!rect) return
 		const ds = point.date.toLocaleDateString('uz-UZ', {
+			weekday: 'long',
 			day: 'numeric',
 			month: 'long',
 		})
-		const c = point.count
+		const tooltipText =
+			point.count === 0
+				? `Faollik yo'q - ${ds}`
+				: `${point.count} test - ${ds}`
 		setTooltip({
-			text:
-				c === 0
-					? `Faollik yo'q · ${ds}`
-					: `${c} ${c === 1 ? 'test' : 'test'} · ${ds}`,
+			text: tooltipText,
 			x: e.clientX - rect.left + 14,
 			y: e.clientY - rect.top - 42,
 			visible: true,
@@ -260,7 +278,9 @@ function ActivityHeatmap({ data }: { data: HeatPoint[] }) {
 
 export default function ProfileSettings({
 	userId,
+	authUserId,
 	userEmail,
+	authProvider = 'email',
 	onSignOut,
 	onInstall,
 	mode,
@@ -271,6 +291,10 @@ export default function ProfileSettings({
 	const [isChangingPassword, setIsChangingPassword] = useState(false)
 	const [newPassword, setNewPassword] = useState('')
 	const [confirmPassword, setConfirmPassword] = useState('')
+	const [passwordResetCode, setPasswordResetCode] = useState('')
+	const [passwordResetStep, setPasswordResetStep] = useState<'idle' | 'verify'>(
+		'idle',
+	)
 	const [showPassword, setShowPassword] = useState(false)
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 	const [isPWA, setIsPWA] = useState(false)
@@ -286,6 +310,52 @@ export default function ProfileSettings({
 		return false
 	})
 	const fileInputRef = useRef<HTMLInputElement>(null)
+	const isGoogleAccount = authProvider.toLowerCase() === 'google'
+	const apiBase = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+
+	const upsertProfile = async (payload: {
+		full_name?: string | null
+		avatar_url?: string | null
+	}) => {
+		const normalizedName =
+			payload.full_name === undefined ? undefined : payload.full_name?.trim() || null
+
+		const { data: updatedRows, error: updateError } = await supabase
+			.from('users')
+			.update({
+				...(normalizedName !== undefined ? { full_name: normalizedName } : {}),
+				...(payload.avatar_url !== undefined
+					? { avatar_url: payload.avatar_url }
+					: {}),
+			})
+			.eq('auth_user_id', authUserId)
+			.select('id, full_name, avatar_url')
+
+		if (updateError) throw updateError
+
+		if (updatedRows && updatedRows.length > 0) {
+			const updated = updatedRows[0]
+			setFullName(updated.full_name || '')
+			setAvatarUrl(updated.avatar_url || null)
+			return
+		}
+
+		const { data: inserted, error: insertError } = await supabase
+			.from('users')
+			.insert({
+				auth_user_id: authUserId,
+				email: userEmail,
+				full_name: normalizedName || userEmail.split('@')[0],
+				avatar_url: payload.avatar_url ?? null,
+				role: 'user',
+			})
+			.select('id, full_name, avatar_url')
+			.single()
+
+		if (insertError) throw insertError
+		setFullName(inserted.full_name || '')
+		setAvatarUrl(inserted.avatar_url || null)
+	}
 
 	useEffect(() => {
 		const fetchProfile = async () => {
@@ -293,7 +363,7 @@ export default function ProfileSettings({
 			const { data: profile } = await supabase
 				.from('users')
 				.select('full_name, avatar_url')
-				.eq('id', userId)
+				.eq('auth_user_id', authUserId)
 				.single()
 
 			if (profile) {
@@ -302,50 +372,70 @@ export default function ProfileSettings({
 			}
 
 			// 2. Stats — overall_accuracy va study_streak
-			const { data: statsData } = await supabase
-				.from('stats')
-				.select('overall_accuracy, study_streak')
-				.eq('user_id', userId)
-				.single()
-
 			// 3. question_attempts — yechilgan savollar soni
 			const { count: solvedCount } = await supabase
 				.from('question_attempts')
 				.select('id', { count: 'exact', head: true })
 				.eq('user_id', userId)
 
-			setStats({
-				solved: solvedCount || 0,
-				accuracy: statsData?.overall_accuracy || 0,
-				streak: statsData?.study_streak || 0,
-			})
+			const { count: correctCount } = await supabase
+				.from('question_attempts')
+				.select('id', { count: 'exact', head: true })
+				.eq('user_id', userId)
+				.eq('is_correct', true)
+
 
 			// 4. Sessions — heatmap uchun (faqat completed, oxirgi 365 kun)
 			const yearAgo = new Date()
 			yearAgo.setDate(yearAgo.getDate() - 365)
 
-			const { data: sessions } = await supabase
-				.from('sessions')
+			const { data: attempts } = await supabase
+				.from('question_attempts')
 				.select('created_at')
 				.eq('user_id', userId)
-				.eq('status', 'completed')
 				.gte('created_at', yearAgo.toISOString())
 
 			const countsByDay: Record<string, number> = {}
-			for (const session of sessions || []) {
-				const d = new Date(session.created_at)
-				const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+			for (const attempt of attempts || []) {
+				const key = buildLocalDateKey(new Date(attempt.created_at))
 				countsByDay[key] = (countsByDay[key] || 0) + 1
 			}
 
 			const today = new Date()
 			const series: HeatPoint[] = []
-			for (let i = 365; i >= 0; i--) {
+			for (let i = 364; i >= 0; i--) {
 				const d = new Date(today)
 				d.setDate(today.getDate() - i)
-				const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-				series.push({ key, count: countsByDay[key] || 0, date: new Date(d) })
+				const key = buildLocalDateKey(d)
+				series.push({
+					key,
+					count: countsByDay[key] || 0,
+					date: buildLocalDateFromKey(key),
+				})
 			}
+
+			let streak = 0
+			for (let i = series.length - 1; i >= 0; i--) {
+				if (series[i].count > 0) {
+					streak++
+					continue
+				}
+				if (i === series.length - 1) {
+					continue
+				}
+				break
+			}
+
+			const accuracy =
+				solvedCount && solvedCount > 0
+					? Math.round(((correctCount || 0) / solvedCount) * 100)
+					: 0
+
+			setStats({
+				solved: solvedCount || 0,
+				accuracy,
+				streak,
+			})
 			setActivity(series)
 		}
 
@@ -363,16 +453,12 @@ export default function ProfileSettings({
 		) {
 			setIsPWA(true)
 		}
-	}, [])
+	}, [authUserId, isDarkMode, userId])
 
 	const handleSave = async () => {
 		setIsSaving(true)
 		try {
-			const { error } = await supabase
-				.from('users')
-				.update({ full_name: fullName, avatar_url: avatarUrl })
-				.eq('id', userId)
-			if (error) throw error
+			await upsertProfile({ full_name: fullName, avatar_url: avatarUrl })
 			toast.success("Ma'lumotlar muvaffaqiyatli saqlandi")
 		} catch (error: any) {
 			toast.error('Xatolik yuz berdi: ' + error.message)
@@ -393,13 +479,63 @@ export default function ProfileSettings({
 		}
 		setIsChangingPassword(true)
 		try {
-			const { error } = await supabase.auth.updateUser({
-				password: newPassword,
-			})
-			if (error) throw error
+			if (passwordResetStep === 'idle') {
+				const response = await fetch(`${apiBase}/api/auth/password-reset/send`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ email: userEmail }),
+				})
+				const result = await response.json()
+				if (!response.ok) throw new Error(result.error || 'Kod yuborilmadi')
+				setPasswordResetStep('verify')
+				toast.success('Tasdiqlash kodi emailingizga yuborildi')
+				return
+			}
+
+			if (!passwordResetCode.trim()) {
+				throw new Error('Emailga yuborilgan 6 xonali kodni kiriting')
+			}
+
+			const verifyResponse = await fetch(
+				`${apiBase}/api/auth/password-reset/verify`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						email: userEmail,
+						code: passwordResetCode,
+					}),
+				},
+			)
+			const verifyResult = await verifyResponse.json()
+			if (!verifyResponse.ok) {
+				throw new Error(verifyResult.error || 'Kod noto‘g‘ri yoki eskirgan')
+			}
+
+			const completeResponse = await fetch(
+				`${apiBase}/api/auth/password-reset/complete`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						email: userEmail,
+						resetToken: verifyResult.resetToken,
+						newPassword,
+					}),
+				},
+			)
+			const completeResult = await completeResponse.json()
+			if (!completeResponse.ok) {
+				throw new Error(
+					completeResult.error || 'Parolni yangilashda xatolik yuz berdi',
+				)
+			}
+
 			toast.success('Parol muvaffaqiyatli yangilandi')
 			setNewPassword('')
 			setConfirmPassword('')
+			setPasswordResetCode('')
+			setPasswordResetStep('idle')
 		} catch (error: any) {
 			toast.error('Xatolik yuz berdi: ' + error.message)
 		} finally {
@@ -427,7 +563,19 @@ export default function ProfileSettings({
 			return
 		}
 		const reader = new FileReader()
-		reader.onloadend = () => setAvatarUrl(reader.result as string)
+		reader.onloadend = async () => {
+			const nextAvatarUrl = reader.result as string
+			setAvatarUrl(nextAvatarUrl)
+			setIsSaving(true)
+			try {
+				await upsertProfile({ full_name: fullName, avatar_url: nextAvatarUrl })
+				toast.success('Avatar muvaffaqiyatli saqlandi')
+			} catch (error: any) {
+				toast.error('Avatarni saqlashda xatolik: ' + error.message)
+			} finally {
+				setIsSaving(false)
+			}
+		}
 		reader.readAsDataURL(file)
 	}
 
@@ -621,6 +769,11 @@ export default function ProfileSettings({
 						</h3>
 					</div>
 					<form onSubmit={handlePasswordChange} className='space-y-4'>
+						<p className='rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm leading-6 text-slate-600 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-slate-300'>
+							{isGoogleAccount
+								? "Siz hozir Google orqali kirgansiz. Xohlasangiz, bu yerda alohida parol o'rnatib, keyin email + parol bilan ham kira olasiz."
+								: "Bu parol email orqali kirish uchun ishlatiladi. Agar parolni esdan chiqarsangiz, login oynasidagi 'Parolni unutdingizmi?' tugmasidan foydalaning."}
+						</p>
 						<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 							<div className='space-y-2'>
 								<label className='text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1'>
@@ -669,6 +822,29 @@ export default function ProfileSettings({
 								</div>
 							</div>
 						</div>
+						{passwordResetStep === 'verify' && (
+							<div className='space-y-2'>
+								<label className='text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1'>
+									Tasdiqlash kodi
+								</label>
+								<input
+									type='text'
+									inputMode='numeric'
+									maxLength={6}
+									value={passwordResetCode}
+									onChange={e =>
+										setPasswordResetCode(
+											e.target.value.replace(/\D/g, '').slice(0, 6),
+										)
+									}
+									placeholder='123456'
+									className='w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-3.5 text-center tracking-[0.35em] text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-[#2c5ff2]/20 focus:border-[#2c5ff2] transition-all'
+								/>
+								<p className='text-xs text-slate-500 dark:text-slate-400'>
+									Emailingizga yuborilgan 6 xonali kodni kiriting.
+								</p>
+							</div>
+						)}
 						<button
 							type='submit'
 							disabled={isChangingPassword || !newPassword}
@@ -679,7 +855,11 @@ export default function ProfileSettings({
 							) : (
 								<Shield size={18} />
 							)}
-							Parolni yangilash
+							{passwordResetStep === 'idle'
+								? isGoogleAccount
+									? "Parol o'rnatish uchun kod olish"
+									: 'Parolni yangilash uchun kod olish'
+								: 'Kodni tasdiqlab parolni yangilash'}
 						</button>
 					</form>
 				</section>
@@ -821,3 +1001,5 @@ export default function ProfileSettings({
 		</div>
 	)
 }
+
+

@@ -219,3 +219,35 @@ DROP POLICY IF EXISTS "Users can manage own focus timers" ON public.focus_timers
 CREATE POLICY "Users can manage own focus timers" ON public.focus_timers
 FOR ALL USING (auth.uid() = auth_user_id)
 WITH CHECK (auth.uid() = auth_user_id);
+
+-- Password reset codes table
+CREATE TABLE IF NOT EXISTS public.password_reset_codes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    reset_token_hash TEXT,
+    verified_at TIMESTAMP WITH TIME ZONE,
+    consumed_at TIMESTAMP WITH TIME ZONE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS password_reset_codes_email_idx
+ON public.password_reset_codes (email, created_at DESC);
+
+ALTER TABLE public.password_reset_codes ENABLE ROW LEVEL SECURITY;
+
+-- Signup verification codes table
+CREATE TABLE IF NOT EXISTS public.signup_verification_codes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    consumed_at TIMESTAMP WITH TIME ZONE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS signup_verification_codes_email_idx
+ON public.signup_verification_codes (email, created_at DESC);
+
+ALTER TABLE public.signup_verification_codes ENABLE ROW LEVEL SECURITY;

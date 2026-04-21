@@ -3,6 +3,7 @@ import {
 	sessionService,
 	statsService,
 } from '@/src/services/api'
+import { supabase } from '@/src/lib/supabase'
 import { UserStats } from '@/src/types'
 import {
 	AlertCircle,
@@ -26,6 +27,37 @@ interface DashboardProps {
 	onInstall?: () => void
 }
 
+interface DailyActivity {
+	label: string
+	correct: number
+	incorrect: number
+	isToday: boolean
+}
+
+const dayLabels = ['Ya', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh']
+
+const buildLocalDateKey = (date: Date) =>
+	`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+		2,
+		'0',
+	)}-${String(date.getDate()).padStart(2, '0')}`
+
+const createEmptyWeeklyActivity = () => {
+	const days: DailyActivity[] = []
+	const today = new Date()
+	for (let offset = 6; offset >= 0; offset--) {
+		const date = new Date(today)
+		date.setDate(today.getDate() - offset)
+		days.push({
+			label: dayLabels[date.getDay()],
+			correct: 0,
+			incorrect: 0,
+			isToday: offset === 0,
+		})
+	}
+	return days
+}
+
 export default function Dashboard({
 	userId,
 	onStartTest,
@@ -39,6 +71,8 @@ export default function Dashboard({
 	>({})
 	const [totalQuestions, setTotalQuestions] = useState(0)
 	const [solvedCount, setSolvedCount] = useState(0)
+	const [weeklyActivity, setWeeklyActivity] =
+		useState<DailyActivity[]>(createEmptyWeeklyActivity)
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 
@@ -46,13 +80,23 @@ export default function Dashboard({
 		const fetchData = async () => {
 			setError(null)
 			try {
-				const [statsData, topicsData, progressData, totalCount, solved] =
+				const [statsData, topicsData, progressData, totalCount, solved, attemptsData] =
 					await Promise.allSettled([
 						statsService.getUserStats(userId),
 						questionService.getTopics(),
 						questionService.getTopicProgress(userId),
 						questionService.getTotalQuestionCount(),
 						sessionService.getSolvedQuestionsCount(userId),
+						supabase
+							.from('question_attempts')
+							.select('created_at, is_correct')
+							.eq('user_id', userId)
+							.gte(
+								'created_at',
+								new Date(
+									new Date().setDate(new Date().getDate() - 6),
+								).toISOString(),
+							),
 					])
 
 				let hasError = false
@@ -65,6 +109,41 @@ export default function Dashboard({
 				if (totalCount.status === 'fulfilled')
 					setTotalQuestions(totalCount.value)
 				if (solved.status === 'fulfilled') setSolvedCount(solved.value)
+				if (attemptsData.status === 'fulfilled') {
+					const attempts = attemptsData.value.data || []
+					const countsByDay: Record<string, { correct: number; incorrect: number }> =
+						{}
+
+					for (const attempt of attempts) {
+						const key = buildLocalDateKey(new Date(attempt.created_at))
+						if (!countsByDay[key]) {
+							countsByDay[key] = { correct: 0, incorrect: 0 }
+						}
+						if (attempt.is_correct) {
+							countsByDay[key].correct += 1
+						} else {
+							countsByDay[key].incorrect += 1
+						}
+					}
+
+					const today = new Date()
+					const nextWeeklyActivity: DailyActivity[] = []
+					for (let offset = 6; offset >= 0; offset--) {
+						const date = new Date(today)
+						date.setDate(today.getDate() - offset)
+						const key = buildLocalDateKey(date)
+						const dayData = countsByDay[key] || { correct: 0, incorrect: 0 }
+						nextWeeklyActivity.push({
+							label: dayLabels[date.getDay()],
+							correct: dayData.correct,
+							incorrect: dayData.incorrect,
+							isToday: offset === 0,
+						})
+					}
+					setWeeklyActivity(nextWeeklyActivity)
+				} else {
+					setWeeklyActivity(createEmptyWeeklyActivity())
+				}
 
 				if (hasError) {
 					setError(
@@ -286,43 +365,51 @@ export default function Dashboard({
 							</div>
 						</div>
 						<div className='flex items-stretch gap-2 h-52'>
-							{[
-								{ d: 'Du', c: 65 },
-								{ d: 'Se', c: 82 },
-								{ d: 'Ch', c: 48 },
-								{ d: 'Pa', c: 92 },
-								{ d: 'Ju', c: 75 },
-								{ d: 'Sh', c: 58 },
-								{ d: 'Ya', c: 85 },
-							].map((item, i) => (
+							{weeklyActivity.map((item, i) => {
+								const total = item.correct + item.incorrect
+								const correctHeight =
+									total > 0 ? Math.max(18, Math.round((item.correct / total) * 140)) : 0
+								const incorrectHeight =
+									total > 0
+										? Math.max(12, Math.round((item.incorrect / total) * 140))
+										: 28
+
+								return (
 								<div
 									key={i}
 									className='flex-1 flex flex-col items-center gap-2.5 group cursor-pointer'
 								>
 									<div className='w-full flex flex-col items-center gap-1 relative h-40 justify-end'>
 										<div className='absolute -top-8 left-1/2 -translate-x-1/2 bg-[#1C1C1E] dark:bg-[#FFFFFF] text-white dark:text-[#1C1C1E] text-[10px] font-medium px-2.5 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap shadow-md'>
-											{item.c}%
+											{total === 0
+												? "Faollik yo'q"
+												: `${item.correct} to'g'ri, ${item.incorrect} noto'g'ri`}
 										</div>
 										<motion.div
 											initial={{ height: 0 }}
-											animate={{ height: `${item.c * 2}px` }}
+											animate={{ height: `${correctHeight}px` }}
 											transition={{ duration: 0.5, delay: i * 0.05 }}
-											className={`w-full rounded-xl transition-all group-hover:opacity-80 ${i === 6 ? 'bg-[#007AFF]' : 'bg-[#007AFF] opacity-40'}`}
+											className={`w-full rounded-xl transition-all group-hover:opacity-80 ${
+												item.isToday ? 'bg-[#007AFF]' : 'bg-[#007AFF]/45'
+											}`}
 										/>
 										<motion.div
 											initial={{ height: 0 }}
-											animate={{ height: `${(100 - item.c) * 2}px` }}
+											animate={{ height: `${incorrectHeight}px` }}
 											transition={{ duration: 0.5, delay: i * 0.05 }}
 											className='w-full rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E]'
 										/>
 									</div>
 									<span
-										className={`text-xs font-medium ${i === 6 ? 'text-[#007AFF]' : 'text-[#8E8E93]'}`}
+										className={`text-xs font-medium ${
+											item.isToday ? 'text-[#007AFF]' : 'text-[#8E8E93]'
+										}`}
 									>
-										{item.d}
+										{item.label}
 									</span>
 								</div>
-							))}
+								)
+							})}
 						</div>
 					</div>
 

@@ -52,6 +52,32 @@ const TEST_RESUME_KEY = 'medtest_resume_test'
 const TEST_TOPIC_KEY = 'medtest_test_topic'
 const PENDING_FIRST_NAME_KEY = 'medtest_pending_first_name'
 const PENDING_LAST_NAME_KEY = 'medtest_pending_last_name'
+type PasswordResetStep = 'none' | 'request' | 'verify' | 'complete'
+type SignupVerificationStep = 'none' | 'verify'
+
+const getAuthFlowType = () => {
+	const searchParams = new URLSearchParams(window.location.search)
+	if (searchParams.get('type')) {
+		return searchParams.get('type')
+	}
+
+	const hash = window.location.hash.startsWith('#')
+		? window.location.hash.slice(1)
+		: window.location.hash
+	const hashParams = new URLSearchParams(hash)
+	return hashParams.get('type')
+}
+
+const getAuthProviderLabel = (user: NonNullable<ReturnType<typeof useAuth>['user']>) => {
+	const provider =
+		user.app_metadata?.provider ||
+		user.app_metadata?.providers?.[0] ||
+		user.identities?.[0]?.provider
+
+	if (!provider) return 'email'
+	if (provider === 'google') return 'Google'
+	return provider
+}
 
 const getInitialTab = (): Tab => {
 	if (
@@ -95,7 +121,6 @@ export default function App() {
 		signUp,
 		signInWithGoogle,
 		signOut,
-		resetPassword,
 	} = useAuth()
 	const [internalUserId, setInternalUserId] = useState<string | null>(null)
 	const [userRole, setUserRole] = useState<'user' | 'admin'>('user')
@@ -110,11 +135,21 @@ export default function App() {
 	const [isLogin, setIsLogin] = useState(true)
 	const [showPassword, setShowPassword] = useState(false)
 	const [isRecovering, setIsRecovering] = useState(false)
+	const [confirmPassword, setConfirmPassword] = useState('')
+	const [resetStep, setResetStep] = useState<PasswordResetStep>('none')
+	const [resetCode, setResetCode] = useState('')
+	const [resetToken, setResetToken] = useState('')
+	const [signupStep, setSignupStep] = useState<SignupVerificationStep>('none')
+	const [signupCode, setSignupCode] = useState('')
+	const [isAuthSubmitting, setIsAuthSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 	const [showAuth, setShowAuth] = useState(false)
 	const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
 	const [isPWA, setIsPWA] = useState(false)
+	const apiBase = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+	const isPasswordResetFlow = resetStep !== 'none'
+	const isSignupVerificationFlow = !isLogin && signupStep === 'verify'
 
 	useEffect(() => {
 		if (
@@ -145,14 +180,39 @@ export default function App() {
 	}
 
 	useEffect(() => {
-		// Check for recovery mode in URL
-		const params = new URLSearchParams(window.location.search)
-		if (params.get('type') === 'recovery') {
+		const authFlowType = getAuthFlowType()
+		if (authFlowType === 'recovery') {
 			setIsRecovering(true)
 			setShowAuth(true)
-			setIsLogin(false) // We'll use the signup/reset view
+			setIsLogin(false)
 		}
 	}, [])
+
+	const startPasswordResetFlow = () => {
+		setError(null)
+		setIsRecovering(false)
+		setSignupStep('none')
+		setSignupCode('')
+		setResetStep('request')
+		setResetCode('')
+		setResetToken('')
+		setPassword('')
+		setConfirmPassword('')
+	}
+
+	const closePasswordResetFlow = () => {
+		setResetStep('none')
+		setResetCode('')
+		setResetToken('')
+		setPassword('')
+		setConfirmPassword('')
+		setError(null)
+	}
+
+	const resetSignupVerificationFlow = () => {
+		setSignupStep('none')
+		setSignupCode('')
+	}
 
 	useEffect(() => {
 		localStorage.setItem('activeTab', activeTab)
@@ -192,10 +252,30 @@ export default function App() {
 						throw profileError
 					}
 
-					if (profile) {
-						setInternalUserId(profile.id)
-						const isAdminEmail =
-							user.email?.toLowerCase() === 'oybek.karimjonov1202@gmail.com'
+						if (profile) {
+							const pendingFirstName = localStorage
+								.getItem(PENDING_FIRST_NAME_KEY)
+								?.trim()
+							const pendingLastName = localStorage
+								.getItem(PENDING_LAST_NAME_KEY)
+								?.trim()
+							const pendingFullName = [pendingFirstName, pendingLastName]
+								.filter(Boolean)
+								.join(' ')
+								.trim()
+
+							setInternalUserId(profile.id)
+							const isAdminEmail =
+								user.email?.toLowerCase() === 'oybek.karimjonov1202@gmail.com'
+
+							if (pendingFullName && !profile.full_name) {
+								await supabase
+									.from('users')
+									.update({ full_name: pendingFullName })
+									.eq('id', profile.id)
+								localStorage.removeItem(PENDING_FIRST_NAME_KEY)
+								localStorage.removeItem(PENDING_LAST_NAME_KEY)
+							}
 
 						if (isAdminEmail && profile.role !== 'admin') {
 							console.log('Forcing admin role for:', user.email)
@@ -315,6 +395,89 @@ export default function App() {
 		setError(null)
 		console.log('Attempting auth...', { isLogin, email, isRecovering })
 		try {
+			setIsAuthSubmitting(true)
+
+			if (resetStep === 'request') {
+				if (!email.trim()) {
+					throw new Error('Email manzilingizni kiriting')
+				}
+
+				const response = await fetch(`${apiBase}/api/auth/password-reset/send`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ email }),
+				})
+				const result = await response.json()
+
+				if (!response.ok) {
+					throw new Error(result.error || 'Kod yuborishda xatolik yuz berdi')
+				}
+
+				setResetStep('verify')
+				toast.success(result.message || '6 xonali kod emailingizga yuborildi.')
+				return
+			}
+
+			if (resetStep === 'verify') {
+				if (!resetCode.trim()) {
+					throw new Error('6 xonali kodni kiriting')
+				}
+
+				const response = await fetch(`${apiBase}/api/auth/password-reset/verify`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ email, code: resetCode }),
+				})
+				const result = await response.json()
+
+				if (!response.ok) {
+					throw new Error(result.error || 'Kod noto‘g‘ri yoki eskirgan')
+				}
+
+				setResetToken(result.resetToken)
+				setResetStep('complete')
+				setResetCode('')
+				setPassword('')
+				setConfirmPassword('')
+				toast.success('Kod tasdiqlandi. Endi yangi parol kiriting.')
+				return
+			}
+
+			if (resetStep === 'complete') {
+				if (password.length < 6) {
+					throw new Error("Parol kamida 6 ta belgidan iborat bo'lishi kerak")
+				}
+				if (password !== confirmPassword) {
+					throw new Error('Parollar mos kelmadi')
+				}
+
+				const response = await fetch(
+					`${apiBase}/api/auth/password-reset/complete`,
+					{
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							email,
+							resetToken,
+							newPassword: password,
+						}),
+					},
+				)
+				const result = await response.json()
+
+				if (!response.ok) {
+					throw new Error(
+						result.error || 'Parolni yangilashda xatolik yuz berdi',
+					)
+				}
+
+				toast.success('Parol muvaffaqiyatli yangilandi. Endi kirishingiz mumkin.')
+				closePasswordResetFlow()
+				setIsLogin(true)
+				setPassword('')
+				return
+			}
+
 			if (isRecovering) {
 				if (password.length < 6) {
 					throw new Error("Parol kamida 6 ta belgidan iborat bo'lishi kerak")
@@ -326,6 +489,8 @@ export default function App() {
 				toast.success('Parol muvaffaqiyatli yangilandi!')
 				setIsRecovering(false)
 				setIsLogin(true)
+				setPassword('')
+				setEmail('')
 				// Clean URL
 				window.history.replaceState(
 					{},
@@ -347,18 +512,46 @@ export default function App() {
 				}
 			}
 
-			if (isLogin) {
-				const { data, error: signInError } = await signIn(email, password)
-				if (signInError) {
-					console.error('Sign in error:', signInError)
-					if (signInError.message === 'Invalid login credentials') {
-						throw new Error("Email yoki parol noto'g'ri")
-					}
-					throw signInError
+			if (!isLogin && signupStep === 'none') {
+				const response = await fetch(`${apiBase}/api/auth/signup/send-code`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ email }),
+				})
+				const result = await response.json()
+
+				if (!response.ok) {
+					throw new Error(
+						result.error || "Ro'yxatdan o'tish kodini yuborishda xatolik yuz berdi",
+					)
 				}
-				console.log('Sign in success:', data)
-				toast.success('Xush kelibsiz!')
-			} else {
+
+				setSignupStep('verify')
+				toast.success(result.message || 'Tasdiqlash kodi emailingizga yuborildi.')
+				return
+			}
+
+			if (!isLogin && signupStep === 'verify') {
+				if (!signupCode.trim()) {
+					throw new Error('Emailga yuborilgan 6 xonali kodni kiriting')
+				}
+
+				const verifyResponse = await fetch(
+					`${apiBase}/api/auth/signup/verify-code`,
+					{
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ email, code: signupCode }),
+					},
+				)
+				const verifyResult = await verifyResponse.json()
+
+				if (!verifyResponse.ok) {
+					throw new Error(
+						verifyResult.error || 'Kod noto‘g‘ri yoki eskirgan',
+					)
+				}
+
 				localStorage.setItem(PENDING_FIRST_NAME_KEY, firstName.trim())
 				localStorage.setItem(PENDING_LAST_NAME_KEY, lastName.trim())
 				const { data, error: signUpError } = await signUp(email, password)
@@ -370,26 +563,31 @@ export default function App() {
 					throw signUpError
 				}
 				console.log('Sign up success:', data)
-				toast.success("Ro'yxatdan o'tdingiz! Emailingizni tasdiqlang.")
+				resetSignupVerificationFlow()
+				toast.success("Ro'yxatdan o'tdingiz! Endi tizimga kirishingiz mumkin.")
+				return
+			}
+
+			if (isLogin) {
+				const { data, error: signInError } = await signIn(email, password)
+				if (signInError) {
+					console.error('Sign in error:', signInError)
+					if (signInError.message === 'Invalid login credentials') {
+						throw new Error(
+							"Email yoki parol noto'g'ri. Agar siz avval Google orqali kirgan bo'lsangiz, qayta Google bilan kiring yoki 'Parolni unutdingizmi?' orqali 6 xonali kod oling.",
+						)
+					}
+					throw signInError
+				}
+				console.log('Sign in success:', data)
+				toast.success('Xush kelibsiz!')
 			}
 		} catch (err: any) {
 			console.error('Auth handler caught error:', err)
 			setError(err.message || "Noma'lum xatolik yuz berdi")
 			toast.error(err.message || "Noma'lum xatolik yuz berdi")
-		}
-	}
-
-	const handleForgotPassword = async () => {
-		if (!email) {
-			toast.error('Iltimos, email manzilingizni kiriting')
-			return
-		}
-		try {
-			const { error: resetError } = await resetPassword(email)
-			if (resetError) throw resetError
-			toast.success('Parolni tiklash havolasi emailingizga yuborildi!')
-		} catch (err: any) {
-			toast.error(err.message || 'Xatolik yuz berdi')
+		} finally {
+			setIsAuthSubmitting(false)
 		}
 	}
 
@@ -451,6 +649,8 @@ export default function App() {
 							<button
 								type='button'
 								onClick={() => {
+									closePasswordResetFlow()
+									resetSignupVerificationFlow()
 									setIsLogin(false)
 									setIsRecovering(false)
 								}}
@@ -472,6 +672,8 @@ export default function App() {
 							<button
 								type='button'
 								onClick={() => {
+									closePasswordResetFlow()
+									resetSignupVerificationFlow()
 									setIsLogin(true)
 									setIsRecovering(false)
 								}}
@@ -492,19 +694,40 @@ export default function App() {
 
 						{/* Title */}
 						<h1 className='text-[1.8rem] font-semibold tracking-[-0.04em] text-white mb-1'>
-							{isRecovering
+							{resetStep === 'request'
+								? 'Parolni tiklash'
+								: resetStep === 'verify'
+									? 'Kodni kiriting'
+									: resetStep === 'complete'
+										? 'Yangi parol'
+								: isSignupVerificationFlow
+									? 'Emailni tasdiqlang'
+								: isRecovering
 								? 'Parolni yangilang'
 								: isLogin
 									? 'Hisobingizga kiring'
 									: 'Hisob yarating'}
 						</h1>
 						<p className='text-sm text-white/45 mb-5 leading-6'>
-							Tibbiy testlar, AI sharh va progress bitta platformada.
+							{resetStep === 'request'
+								? 'Emailingizga 6 xonali tasdiqlash kodi yuboramiz.'
+								: resetStep === 'verify'
+									? 'Emailingizga yuborilgan 6 xonali kodni kiriting.'
+									: resetStep === 'complete'
+										? "Endi yangi parol o'rnating."
+								: isSignupVerificationFlow
+									? 'Ro‘yxatdan o‘tishni yakunlash uchun emaildagi 6 xonali kodni kiriting.'
+								: isRecovering
+								? "Emaildagi havola orqali yangi parol o'rnating."
+								: 'Tibbiy testlar, AI sharh va progress bitta platformada.'}
 						</p>
 
 						<form onSubmit={handleAuth} className='space-y-3'>
 							{/* First + Last name (signup only) */}
-							{!isLogin && !isRecovering && (
+							{!isLogin &&
+								!isRecovering &&
+								!isPasswordResetFlow &&
+								!isSignupVerificationFlow && (
 								<div className='grid grid-cols-2 gap-3'>
 									<input
 										type='text'
@@ -535,41 +758,105 @@ export default function App() {
 									placeholder='email@example.com'
 									value={email}
 									onChange={e => setEmail(e.target.value)}
+									disabled={
+										resetStep === 'verify' ||
+										resetStep === 'complete' ||
+										isSignupVerificationFlow
+									}
 									className='w-full rounded-[8px] border border-white/8 bg-white/6 pl-10 pr-4 py-3 text-[14px] text-white placeholder:text-white/25 outline-none transition-all focus:border-[#5f87ff] focus:bg-white/8 focus:ring-2 focus:ring-[#2c5ff2]/20'
 									required
 								/>
 							</div>
 
 							{/* Password */}
-							<div className='relative'>
+							{isSignupVerificationFlow ? (
 								<input
-									type={showPassword ? 'text' : 'password'}
-									placeholder='••••••••••'
-									value={password}
-									onChange={e => setPassword(e.target.value)}
-									className='w-full rounded-[8px] border border-white/8 bg-white/6 px-4 py-3 pr-12 text-[14px] text-white placeholder:text-white/25 outline-none transition-all focus:border-[#5f87ff] focus:bg-white/8 focus:ring-2 focus:ring-[#2c5ff2]/20'
+									type='text'
+									inputMode='numeric'
+									maxLength={5}
+									placeholder='12345'
+									value={signupCode}
+									onChange={e =>
+										setSignupCode(e.target.value.replace(/\D/g, '').slice(0, 5))
+									}
+									className='w-full rounded-[8px] border border-white/8 bg-white/6 px-4 py-3 text-center tracking-[0.5em] text-[18px] font-semibold text-white placeholder:text-white/25 outline-none transition-all focus:border-[#5f87ff] focus:bg-white/8 focus:ring-2 focus:ring-[#2c5ff2]/20'
 									required
 								/>
-								<button
-									type='button'
-									onClick={() => setShowPassword(!showPassword)}
-									className='absolute right-4 top-1/2 -translate-y-1/2 text-white/35 transition-colors hover:text-white'
-								>
-									{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-								</button>
-							</div>
+							) : resetStep === 'verify' ? (
+								<input
+									type='text'
+									inputMode='numeric'
+									maxLength={5}
+									placeholder='12345'
+									value={resetCode}
+									onChange={e =>
+										setResetCode(e.target.value.replace(/\D/g, '').slice(0, 5))
+									}
+									className='w-full rounded-[8px] border border-white/8 bg-white/6 px-4 py-3 text-center tracking-[0.5em] text-[18px] font-semibold text-white placeholder:text-white/25 outline-none transition-all focus:border-[#5f87ff] focus:bg-white/8 focus:ring-2 focus:ring-[#2c5ff2]/20'
+									required
+								/>
+							) : resetStep === 'request' ? null : (
+								<div className='space-y-3'>
+									<div className='relative'>
+										<input
+											type={showPassword ? 'text' : 'password'}
+											placeholder='••••••••••'
+											value={password}
+											onChange={e => setPassword(e.target.value)}
+											className='w-full rounded-[8px] border border-white/8 bg-white/6 px-4 py-3 pr-12 text-[14px] text-white placeholder:text-white/25 outline-none transition-all focus:border-[#5f87ff] focus:bg-white/8 focus:ring-2 focus:ring-[#2c5ff2]/20'
+											required
+										/>
+										<button
+											type='button'
+											onClick={() => setShowPassword(!showPassword)}
+											className='absolute right-4 top-1/2 -translate-y-1/2 text-white/35 transition-colors hover:text-white'
+										>
+											{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+										</button>
+									</div>
+
+									{resetStep === 'complete' && (
+										<input
+											type={showPassword ? 'text' : 'password'}
+											placeholder='Parolni tasdiqlang'
+											value={confirmPassword}
+											onChange={e => setConfirmPassword(e.target.value)}
+											className='w-full rounded-[8px] border border-white/8 bg-white/6 px-4 py-3 text-[14px] text-white placeholder:text-white/25 outline-none transition-all focus:border-[#5f87ff] focus:bg-white/8 focus:ring-2 focus:ring-[#2c5ff2]/20'
+											required
+										/>
+									)}
+								</div>
+							)}
 
 							{/* Forgot password */}
-							{isLogin && !isRecovering && (
+							{isLogin && !isRecovering && !isPasswordResetFlow && (
 								<div className='flex justify-end'>
 									<button
 										type='button'
-										onClick={handleForgotPassword}
+										onClick={startPasswordResetFlow}
 										className='text-[11px] font-semibold tracking-wide text-[#8eb0ff] hover:text-white transition-colors'
 									>
 										Parolni unutdingizmi?
 									</button>
 								</div>
+							)}
+
+							{isLogin && !isRecovering && !isPasswordResetFlow && (
+								<p className='rounded-[8px] border border-white/10 bg-white/5 px-3 py-2 text-[11px] leading-5 text-white/60'>
+									Agar akkaunt Google orqali yaratilgan bo&apos;lsa, oddiy parol ishlamasligi mumkin. Bunday holatda Google bilan kiring yoki email orqali parol o&apos;rnating.
+								</p>
+							)}
+
+							{isPasswordResetFlow && (
+								<p className='rounded-[8px] border border-white/10 bg-white/5 px-3 py-2 text-[11px] leading-5 text-white/60'>
+									Kod 10 daqiqa amal qiladi. Agar email kelmasa, spam papkasini ham tekshiring.
+								</p>
+							)}
+
+							{isSignupVerificationFlow && (
+								<p className='rounded-[8px] border border-white/10 bg-white/5 px-3 py-2 text-[11px] leading-5 text-white/60'>
+									Ro‘yxatdan o‘tish kodi 10 daqiqa amal qiladi. Email kelmasa, spam papkasini ham tekshiring.
+								</p>
 							)}
 
 							{/* Error */}
@@ -582,9 +869,20 @@ export default function App() {
 							{/* Submit */}
 							<button
 								type='submit'
+								disabled={isAuthSubmitting}
 								className='w-full rounded-[8px] bg-white py-3 text-[14px] font-semibold text-[#08111f] transition-all shadow-[0_4px_36px_rgba(255,255,255,0.10)] hover:bg-[#eef4ff] mt-5'
 							>
-								{isRecovering
+								{isAuthSubmitting
+									? 'Yuklanmoqda...'
+									: resetStep === 'request'
+										? 'Kodni yuborish'
+										: resetStep === 'verify'
+											? 'Kodni tasdiqlash'
+											: resetStep === 'complete'
+												? 'Parolni saqlash'
+								: isSignupVerificationFlow
+									? 'Ro‘yxatdan o‘tishni tasdiqlash'
+								: isRecovering
 									? 'Parolni yangilash'
 									: isLogin
 										? 'Kirish'
@@ -592,7 +890,8 @@ export default function App() {
 							</button>
 
 							{/* Divider */}
-							<div className='relative py-2'>
+							{!isPasswordResetFlow && !isSignupVerificationFlow && (
+								<div className='relative py-2'>
 								<div className='absolute inset-0 flex items-center'>
 									<div className='w-full border-t border-white/10' />
 								</div>
@@ -601,10 +900,12 @@ export default function App() {
 										Yoki Google bilan
 									</span>
 								</div>
-							</div>
+								</div>
+							)}
 
 							{/* Google */}
-							<button
+							{!isPasswordResetFlow && !isSignupVerificationFlow && (
+								<button
 								type='button'
 								onClick={() => signInWithGoogle()}
 								className='flex w-full items-center justify-center gap-3 rounded-[8px] border border-white/10 bg-white/7 py-3.5 text-[14px] font-semibold text-white transition-all hover:bg-white/10'
@@ -629,18 +930,38 @@ export default function App() {
 								</svg>
 								Google orqali kirish
 							</button>
+							)}
 						</form>
 
 						{/* Switch login/signup */}
 						<div className='mt-4 text-center'>
-							<button
-								onClick={() => setIsLogin(!isLogin)}
-								className='text-sm font-semibold text-[#8eb0ff] hover:text-white transition-colors'
-							>
-								{isLogin
-									? "Hisobingiz yo'qmi? Ro'yxatdan o'ting"
-									: 'Hisobingiz bormi? Kiring'}
-							</button>
+							{isPasswordResetFlow ? (
+								<button
+									onClick={closePasswordResetFlow}
+									className='text-sm font-semibold text-[#8eb0ff] hover:text-white transition-colors'
+								>
+									Kirish sahifasiga qaytish
+								</button>
+							) : isSignupVerificationFlow ? (
+								<button
+									onClick={resetSignupVerificationFlow}
+									className='text-sm font-semibold text-[#8eb0ff] hover:text-white transition-colors'
+								>
+									Ro‘yxatdan o‘tish formasiga qaytish
+								</button>
+							) : (
+								<button
+									onClick={() => {
+										resetSignupVerificationFlow()
+										setIsLogin(!isLogin)
+									}}
+									className='text-sm font-semibold text-[#8eb0ff] hover:text-white transition-colors'
+								>
+									{isLogin
+										? "Hisobingiz yo'qmi? Ro'yxatdan o'ting"
+										: 'Hisobingiz bormi? Kiring'}
+								</button>
+							)}
 						</div>
 					</motion.div>
 				</div>
@@ -977,7 +1298,9 @@ export default function App() {
 									<ProfileSettings
 										mode={activeTab === 'profile' ? 'profile' : 'settings'}
 										userId={internalUserId}
+										authUserId={user.id}
 										userEmail={user.email || ''}
+										authProvider={getAuthProviderLabel(user)}
 										onSignOut={() => {
 											localStorage.removeItem('activeTab')
 											localStorage.removeItem('selectedTopic')
