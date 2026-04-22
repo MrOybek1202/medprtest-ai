@@ -137,10 +137,19 @@ export default function App() {
 	const [signupCode, setSignupCode] = useState('')
 	const [isAuthSubmitting, setIsAuthSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
-	const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+	const [isSidebarOpen, setIsSidebarOpen] = useState(() =>
+		typeof window !== 'undefined'
+			? window.matchMedia('(min-width: 1024px)').matches
+			: false,
+	)
 	const [showAuth, setShowAuth] = useState(false)
 	const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
 	const [isPWA, setIsPWA] = useState(false)
+	const [isDesktop, setIsDesktop] = useState(() =>
+		typeof window !== 'undefined'
+			? window.matchMedia('(min-width: 1024px)').matches
+			: false,
+	)
 	const previousTabRef = useRef<Tab>(activeTab)
 	const apiBase = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 	const isPasswordResetFlow = resetStep !== 'none'
@@ -167,6 +176,30 @@ export default function App() {
 			e.preventDefault()
 			setDeferredPrompt(e)
 		})
+	}, [])
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+
+		const mediaQuery = window.matchMedia('(min-width: 1024px)')
+		const syncDesktopState = (matches: boolean) => {
+			setIsDesktop(matches)
+			if (matches) {
+				setIsSidebarOpen(true)
+			}
+		}
+
+		syncDesktopState(mediaQuery.matches)
+
+		const handleChange = (event: MediaQueryListEvent) => {
+			syncDesktopState(event.matches)
+		}
+
+		mediaQuery.addEventListener('change', handleChange)
+
+		return () => {
+			mediaQuery.removeEventListener('change', handleChange)
+		}
 	}, [])
 
 	const handleInstallApp = async () => {
@@ -985,10 +1018,10 @@ export default function App() {
 				<motion.aside
 					initial={false}
 					animate={{
-						width: isSidebarOpen ? 260 : 80,
-						x: isSidebarOpen ? 0 : window.innerWidth < 1024 ? -260 : 0,
+						width: isDesktop ? (isSidebarOpen ? 260 : 80) : 260,
+						x: isDesktop ? 0 : isSidebarOpen ? 0 : -260,
 					}}
-					className={`app-panel fixed z-50 mr-2.5 hidden h-full shrink-0 flex-col rounded-[18px] transition-all duration-300 lg:relative lg:flex ${!isSidebarOpen && 'lg:w-20'}`}
+					className={`app-panel fixed z-50 mr-2.5 hidden h-full shrink-0 flex-col rounded-[18px] transition-all duration-300 lg:relative lg:flex ${isDesktop && !isSidebarOpen ? 'lg:w-20' : ''}`}
 				>
 					<div className='flex shrink-0 items-center gap-3 p-5'>
 						<div className='flex aspect-square w-10 shrink-0 items-center justify-center rounded-xl bg-[#102347] text-white'>
