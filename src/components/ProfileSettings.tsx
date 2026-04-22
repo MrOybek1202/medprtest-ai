@@ -44,6 +44,13 @@ const buildLocalDateKey = (date: Date) =>
 		'0',
 	)}-${String(date.getDate()).padStart(2, '0')}`
 
+const buildLocalDateKeyFromTimestamp = (value: string) => {
+	const date = new Date(value)
+	return buildLocalDateKey(
+		new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0),
+	)
+}
+
 const buildLocalDateFromKey = (key: string) => {
 	const [year, month, day] = key.split('-').map(Number)
 	return new Date(year, month - 1, day, 12, 0, 0, 0)
@@ -56,12 +63,20 @@ const getMondayBasedDayIndex = (date: Date) => {
 
 function ActivityHeatmap({ data }: { data: HeatPoint[] }) {
 	const containerRef = useRef<HTMLDivElement>(null)
+	const scrollRef = useRef<HTMLDivElement>(null)
 	const [tooltip, setTooltip] = useState<{
 		text: string
 		x: number
 		y: number
 		visible: boolean
 	}>({ text: '', x: 0, y: 0, visible: false })
+
+	useEffect(() => {
+		const container = scrollRef.current
+		if (!container || !data.length) return
+
+		container.scrollLeft = container.scrollWidth - container.clientWidth
+	}, [data])
 
 	if (!data.length) {
 		return (
@@ -198,7 +213,7 @@ function ActivityHeatmap({ data }: { data: HeatPoint[] }) {
 					</div>
 				)}
 
-				<div className='flex gap-3 overflow-x-auto pb-1'>
+				<div ref={scrollRef} className='flex gap-3 overflow-x-auto pb-1'>
 					{/* Day labels */}
 					<div className='flex flex-col gap-[3px] pt-[22px] flex-shrink-0 text-[11px] text-slate-400 dark:text-slate-600'>
 						{dayLabels.map((label, i) => (
@@ -397,7 +412,7 @@ export default function ProfileSettings({
 
 			const countsByDay: Record<string, number> = {}
 			for (const attempt of attempts || []) {
-				const key = buildLocalDateKey(new Date(attempt.created_at))
+				const key = buildLocalDateKeyFromTimestamp(attempt.created_at)
 				countsByDay[key] = (countsByDay[key] || 0) + 1
 			}
 

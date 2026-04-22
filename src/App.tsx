@@ -21,7 +21,7 @@ import {
 	User,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useEffect, useRef, useState } from 'react'
 import { Toaster, toast } from 'sonner'
 import AIChat from './components/AIChat'
 import AdminPanel from './components/AdminPanel'
@@ -80,12 +80,6 @@ const getAuthProviderLabel = (user: NonNullable<ReturnType<typeof useAuth>['user
 }
 
 const getInitialTab = (): Tab => {
-	if (
-		localStorage.getItem(TEST_RESUME_KEY) === '1' ||
-		localStorage.getItem('activeTab') === 'test'
-	) {
-		return 'test'
-	}
 	const savedTab = localStorage.getItem('activeTab')
 	if (
 		savedTab &&
@@ -147,9 +141,19 @@ export default function App() {
 	const [showAuth, setShowAuth] = useState(false)
 	const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
 	const [isPWA, setIsPWA] = useState(false)
+	const previousTabRef = useRef<Tab>(activeTab)
 	const apiBase = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 	const isPasswordResetFlow = resetStep !== 'none'
 	const isSignupVerificationFlow = !isLogin && signupStep === 'verify'
+
+	const handleTabChange = (nextTab: Tab) => {
+		if (nextTab !== 'test') {
+			localStorage.removeItem(TEST_RESUME_KEY)
+			localStorage.removeItem(TEST_TOPIC_KEY)
+			setSelectedTopic(null)
+		}
+		setActiveTab(nextTab)
+	}
 
 	useEffect(() => {
 		if (
@@ -219,6 +223,14 @@ export default function App() {
 	}, [activeTab])
 
 	useEffect(() => {
+		if (previousTabRef.current === 'test' && activeTab !== 'test') {
+			localStorage.removeItem(TEST_RESUME_KEY)
+			localStorage.removeItem(TEST_TOPIC_KEY)
+		}
+		previousTabRef.current = activeTab
+	}, [activeTab])
+
+	useEffect(() => {
 		if (selectedTopic !== null) {
 			localStorage.setItem('selectedTopic', selectedTopic)
 			localStorage.setItem(TEST_TOPIC_KEY, selectedTopic)
@@ -227,6 +239,22 @@ export default function App() {
 			localStorage.removeItem(TEST_TOPIC_KEY)
 		}
 	}, [selectedTopic])
+
+	useEffect(() => {
+		if (!user || !internalUserId) return
+
+		const savedTab = localStorage.getItem('activeTab')
+		const defaultTab: Tab = userRole === 'admin' ? 'admin' : 'dashboard'
+
+		if (!savedTab) {
+			setActiveTab(defaultTab)
+			return
+		}
+
+		if (savedTab === 'admin' && userRole !== 'admin') {
+			setActiveTab('dashboard')
+		}
+	}, [user, internalUserId, userRole])
 
 	useEffect(() => {
 		// Theme initialization
@@ -350,45 +378,6 @@ export default function App() {
 			setUserRole('user')
 		}
 	}, [user])
-
-	useEffect(() => {
-		if (!user || !internalUserId || userRole === 'admin') return
-
-		const checkSession = async () => {
-			const { data } = await supabase
-				.from('sessions')
-				.select('*')
-				.eq('user_id', internalUserId)
-				.order('created_at', { ascending: false })
-				.limit(1)
-				.maybeSingle()
-
-			if (data?.status === 'active') {
-				localStorage.setItem(TEST_RESUME_KEY, '1')
-				localStorage.setItem('activeTab', 'test')
-				if (data.topic) {
-					localStorage.setItem(TEST_TOPIC_KEY, data.topic)
-					setSelectedTopic(currentTopic => currentTopic ?? data.topic)
-				}
-				setActiveTab('test')
-			}
-		}
-
-		const handleResumeCheck = () => {
-			if (document.visibilityState === 'visible') {
-				void checkSession()
-			}
-		}
-
-		void checkSession()
-		window.addEventListener('pageshow', handleResumeCheck)
-		document.addEventListener('visibilitychange', handleResumeCheck)
-
-		return () => {
-			window.removeEventListener('pageshow', handleResumeCheck)
-			document.removeEventListener('visibilitychange', handleResumeCheck)
-		}
-	}, [user, internalUserId, userRole])
 
 	const handleAuth = async (e: FormEvent) => {
 		e.preventDefault()
@@ -1026,7 +1015,7 @@ export default function App() {
 								)}
 								{userRole === 'admin' && (
 									<button
-										onClick={() => setActiveTab('admin')}
+										onClick={() => handleTabChange('admin')}
 										className={`w-full flex items-center gap-3 px-3.5 py-3.5 rounded-2xl transition-all group ${
 											activeTab === 'admin'
 												? 'bg-[#2c5ff2] text-white shadow-lg shadow-[#2c5ff2]/20'
@@ -1055,7 +1044,7 @@ export default function App() {
 								{menuItems.map(item => (
 									<button
 										key={item.id}
-										onClick={() => setActiveTab(item.id as Tab)}
+										onClick={() => handleTabChange(item.id as Tab)}
 										className={`w-full flex items-center gap-3 px-3.5 py-3.5 rounded-2xl transition-all group ${
 											activeTab === item.id
 												? 'bg-[#2c5ff2] text-white shadow-[#2c5ff2]/20'
@@ -1092,7 +1081,7 @@ export default function App() {
 								{generalItems.map(item => (
 									<button
 										key={item.id}
-										onClick={() => setActiveTab(item.id as Tab)}
+										onClick={() => handleTabChange(item.id as Tab)}
 										className={`w-full flex items-center gap-3 px-3.5  py-3.5 rounded-2xl transition-all group ${
 											activeTab === item.id
 												? 'bg-[#2c5ff2] text-white shadow-[#2c5ff2]/20'
@@ -1346,7 +1335,7 @@ export default function App() {
 			{activeTab !== 'test' && (
 				<MobileNav
 					activeTab={activeTab}
-					onTabChange={setActiveTab}
+					onTabChange={handleTabChange}
 					userRole={userRole}
 				/>
 			)}
