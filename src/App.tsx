@@ -137,11 +137,7 @@ export default function App() {
 	const [signupCode, setSignupCode] = useState('')
 	const [isAuthSubmitting, setIsAuthSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
-	const [isSidebarOpen, setIsSidebarOpen] = useState(() =>
-		typeof window !== 'undefined'
-			? window.matchMedia('(min-width: 1024px)').matches
-			: false,
-	)
+	const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 	const [showAuth, setShowAuth] = useState(false)
 	const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
 	const [isPWA, setIsPWA] = useState(false)
@@ -184,9 +180,6 @@ export default function App() {
 		const mediaQuery = window.matchMedia('(min-width: 1024px)')
 		const syncDesktopState = (matches: boolean) => {
 			setIsDesktop(matches)
-			if (matches) {
-				setIsSidebarOpen(true)
-			}
 		}
 
 		syncDesktopState(mediaQuery.matches)
